@@ -23,7 +23,7 @@ On the rPi web dashboard:
 1) Make the rPi writable by selecting the "Writable" tab
 2) In the rPi web dashboard Application tab, select the "Uploaded Java jar"
    option for Application
-3) Click "Browse..." and select the "java-multiCameraServer-all.jar" file in
+3) Click "Browse..." and select the "2019-RaspberryPi-all.jar" file in
    your desktop project directory in the build/libs subdirectory
 4) Click Save
 

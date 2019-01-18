@@ -312,6 +312,8 @@ public final class Main {
                 // do something with pipeline results
                 System.out.println("Detected " + pipeline.detected + " line(s)!");
                 outputStream.putFrame(pipeline.dst);
+
+                // NetworkTableInstance.getDefault().getTable("vision").getEntry("test").setString(System.currentTimeMillis() + ": Detected " + pipeline.detected + " line(s)!");
             });
             /*
              * something like this for GRIP: VisionThread visionThread = new
