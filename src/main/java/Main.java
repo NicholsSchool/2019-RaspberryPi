@@ -30,6 +30,7 @@ import edu.wpi.first.vision.VisionPipeline;
 import edu.wpi.first.vision.VisionThread;
 import edu.wpi.first.vision.VisionRunner.Listener;
 
+import org.opencv.core.CvException;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
@@ -252,7 +253,11 @@ public final class Main {
 
             // Find all external contours
             ArrayList<MatOfPoint> contours = new ArrayList<>();
-            Imgproc.findContours(dst, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+            try {
+                Imgproc.findContours(dst, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+            } catch (CvException e) {
+                System.out.println(e.getMessage());
+            }
 
             // Approximate contours with polygons
             for (MatOfPoint contour : contours) {
@@ -340,7 +345,7 @@ public final class Main {
             visionThread.start();
 
             // loop forever
-            while(true) {
+            while (true) {
                 System.out.println("Switching cameras in 5 seconds");
 
                 try {
@@ -349,7 +354,7 @@ public final class Main {
                     return;
                 }
 
-                if(videoSource == cameras.get(0)) {
+                if (videoSource == cameras.get(0)) {
                     videoSource = cameras.get(1);
                 } else {
                     videoSource = cameras.get(0);
