@@ -28,6 +28,7 @@ import edu.wpi.first.cameraserver.CameraServer;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.vision.VisionPipeline;
 import edu.wpi.first.vision.VisionThread;
+import edu.wpi.first.vision.VisionRunner.Listener;
 
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
@@ -72,6 +73,8 @@ import org.opencv.imgproc.Imgproc;
 
 public final class Main {
     private static String configFile = "/boot/frc.json";
+
+    private static final int CAMERA_RESOLUTION_X = 320, CAMERA_RESOLUTION_Y = 180, CAMERA_FPS = 30;
 
     @SuppressWarnings("MemberName")
     public static class CameraConfig {
@@ -201,6 +204,12 @@ public final class Main {
             server.setConfigJson(gson.toJson(config.streamConfig));
         }
 
+        server.setResolution(CAMERA_RESOLUTION_X, CAMERA_RESOLUTION_Y);
+        server.setFPS(CAMERA_FPS);
+
+        camera.setResolution(CAMERA_RESOLUTION_X, CAMERA_RESOLUTION_Y);
+        camera.setFPS(CAMERA_FPS);
+
         return camera;
     }
 
@@ -218,6 +227,8 @@ public final class Main {
 
     /**
      * Get cargo lines using contour analysis.
+     * 
+     * @author Junqi Wu
      */
     public static class CargoPipeline implements VisionPipeline {
 
@@ -230,6 +241,8 @@ public final class Main {
                 return;
             }
 
+            // System.out.println("width: " + src.cols() + " height: " + src.rows());
+
             detected = 0;
 
             dst = new Mat();
@@ -238,14 +251,13 @@ public final class Main {
             Imgproc.cvtColor(src, dst, Imgproc.COLOR_BGR2GRAY);
 
             // Separate bright areas from dark areas
-            Imgproc.threshold(dst, dst, 127, 255, Imgproc.THRESH_BINARY);
+            Imgproc.threshold(dst, dst, 190, 255, Imgproc.THRESH_BINARY);
 
             // Find all external contours
             ArrayList<MatOfPoint> contours = new ArrayList<>();
             Imgproc.findContours(dst, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
 
             // Approximate contours with polygons
-            src.copyTo(dst);
             for (MatOfPoint contour : contours) {
 
                 // Only include large contours
@@ -255,7 +267,7 @@ public final class Main {
 
                     // Epsilon will be 5% of the perimeter, a lower epsilon will result in more
                     // vertices
-                    double epsilon = 0.05 * Imgproc.arcLength(contour2f, true);
+                    double epsilon = 0.02 * Imgproc.arcLength(contour2f, true);
 
                     // Approximate contour to polygon using the Ramer-Douglas-Peucker algorithm
                     Imgproc.approxPolyDP(contour2f, contour2f, epsilon, true);
@@ -263,11 +275,13 @@ public final class Main {
                     // Draw the polygon if it has 4 vertices
                     if (contour2f.rows() == 4) {
                         detected++;
-                        Imgproc.drawContours(dst, Arrays.asList(new MatOfPoint(contour2f.toArray())), -1,
+                        Imgproc.drawContours(src, Arrays.asList(new MatOfPoint(contour2f.toArray())), -1,
                                 new Scalar(0, 0, 255), 2);
                     }
                 }
             }
+
+            dst = src;
 
         }
 
@@ -296,7 +310,8 @@ public final class Main {
             ntinst.startClientTeam(team);
         }
 
-        System.out.print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nH E L L O ! ! !\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+        System.out.print(
+                "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nH E L L O ! ! !\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
 
         // start cameras
         List<VideoSource> cameras = new ArrayList<>();
@@ -306,29 +321,49 @@ public final class Main {
 
         // start image processing on camera 0 if present
         if (cameras.size() >= 1) {
-            CvSource outputStream = CameraServer.getInstance().putVideo("Vision Pipline Output", 400, 300);
+            CvSource outputStream = CameraServer.getInstance().putVideo("Vision Pipline Output", CAMERA_RESOLUTION_X,
+                    CAMERA_RESOLUTION_Y);
 
-            VisionThread visionThread = new VisionThread(cameras.get(0), new CargoPipeline(), pipeline -> {
+            VideoSource videoSource = cameras.get(0);
+            CargoPipeline visionPipeline = new CargoPipeline();
+            Listener<CargoPipeline> callback = pipeline -> {
                 // do something with pipeline results
-                System.out.println("Detected " + pipeline.detected + " line(s)!");
+                // System.out.println("Detected " + pipeline.detected + " line(s)!");
                 outputStream.putFrame(pipeline.dst);
 
-                // NetworkTableInstance.getDefault().getTable("vision").getEntry("test").setString(System.currentTimeMillis() + ": Detected " + pipeline.detected + " line(s)!");
-            });
+                NetworkTableInstance.getDefault().getTable("pi").getEntry("test")
+                        .setString("Pi time: " + System.currentTimeMillis());
+            };
+
+            VisionThread visionThread = new VisionThread(videoSource, visionPipeline, callback);
             /*
              * something like this for GRIP: VisionThread visionThread = new
              * VisionThread(cameras.get(0), new GripPipeline(), pipeline -> { ... });
              */
             visionThread.start();
-        }
 
-        // loop forever
-        for (;;) {
-            try {
-                Thread.sleep(10000);
-            } catch (InterruptedException ex) {
-                return;
+            // loop forever
+            while(true) {
+                System.out.println("Switching cameras in 5 seconds");
+
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException ex) {
+                    return;
+                }
+
+                if(videoSource == cameras.get(0)) {
+                    videoSource = null;
+                } else {
+                    videoSource = cameras.get(0);
+                }
+
+                visionThread.stop();
+                visionThread = new VisionThread(videoSource, visionPipeline, callback);
+                visionThread.start();
             }
+        } else {
+            System.out.println("ERROR: ONLY " + cameras.size() + " CAMERA(S) ARE CONNECTED");
         }
     }
 }
