@@ -74,7 +74,7 @@ import org.opencv.imgproc.Imgproc;
 public final class Main {
     private static String configFile = "/boot/frc.json";
 
-    private static final int CAMERA_RESOLUTION_X = 320, CAMERA_RESOLUTION_Y = 180, CAMERA_FPS = 30;
+    private static final int CAMERA_RESOLUTION_X = 320, CAMERA_RESOLUTION_Y = 240, CAMERA_FPS = 30;
 
     @SuppressWarnings("MemberName")
     public static class CameraConfig {
@@ -203,9 +203,6 @@ public final class Main {
         if (config.streamConfig != null) {
             server.setConfigJson(gson.toJson(config.streamConfig));
         }
-
-        server.setResolution(CAMERA_RESOLUTION_X, CAMERA_RESOLUTION_Y);
-        server.setFPS(CAMERA_FPS);
 
         camera.setResolution(CAMERA_RESOLUTION_X, CAMERA_RESOLUTION_Y);
         camera.setFPS(CAMERA_FPS);
