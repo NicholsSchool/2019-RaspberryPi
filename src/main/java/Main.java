@@ -320,7 +320,7 @@ public final class Main {
         }
 
         // start image processing on camera 0 if present
-        if (cameras.size() >= 1) {
+        if (cameras.size() == 2) {
             CvSource outputStream = CameraServer.getInstance().putVideo("Vision Pipline Output", CAMERA_RESOLUTION_X,
                     CAMERA_RESOLUTION_Y);
 
@@ -353,12 +353,12 @@ public final class Main {
                 }
 
                 if(videoSource == cameras.get(0)) {
-                    videoSource = null;
+                    videoSource = cameras.get(1);
                 } else {
                     videoSource = cameras.get(0);
                 }
 
-                visionThread.stop();
+                visionThread.interrupt();
                 visionThread = new VisionThread(videoSource, visionPipeline, callback);
                 visionThread.start();
             }
