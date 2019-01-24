@@ -34,8 +34,10 @@ import org.opencv.core.CvException;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.imgproc.Moments;
 
 /*
    JSON format:
@@ -230,18 +232,17 @@ public final class Main {
      */
     public static class CargoPipeline implements VisionPipeline {
 
-        public int detected;
         public Mat dst;
+
+        public double x;
+        public double y;
+        public long lastUpdate;
 
         @Override
         public void process(Mat src) {
             if (src.empty()) {
                 return;
             }
-
-            // System.out.println("width: " + src.cols() + " height: " + src.rows());
-
-            detected = 0;
 
             dst = new Mat();
 
@@ -276,9 +277,13 @@ public final class Main {
 
                     // Draw the polygon if it has 4 vertices
                     if (contour2f.rows() == 4) {
-                        detected++;
+                        Moments m = Imgproc.moments(contour);
+                        x = m.m10 / m.m00;
+                        y = m.m01 / m.m00;
+                        lastUpdate = System.currentTimeMillis();
                         Imgproc.drawContours(src, Arrays.asList(new MatOfPoint(contour2f.toArray())), -1,
                                 new Scalar(0, 0, 255), 2);
+                        Imgproc.circle(src, new Point(x, y), 5, new Scalar(255, 0, 0));
                     }
                 }
             }
@@ -333,8 +338,9 @@ public final class Main {
                 // System.out.println("Detected " + pipeline.detected + " line(s)!");
                 outputStream.putFrame(pipeline.dst);
 
-                NetworkTableInstance.getDefault().getTable("pi").getEntry("test")
-                        .setString("Pi time: " + System.currentTimeMillis());
+                NetworkTableInstance.getDefault().getTable("pi").getEntry("lineX").setDouble(pipeline.x / CAMERA_RESOLUTION_X);
+                NetworkTableInstance.getDefault().getTable("pi").getEntry("lineY").setDouble(pipeline.y / CAMERA_RESOLUTION_Y);
+                NetworkTableInstance.getDefault().getTable("pi").getEntry("lastUpdate").setNumber(pipeline.lastUpdate);
             };
 
             VisionThread visionThread = new VisionThread(videoSource, visionPipeline, callback);
@@ -355,7 +361,7 @@ public final class Main {
                 }
 
                 if (videoSource == cameras.get(0)) {
-                    videoSource = cameras.get(1);
+                    // videoSource = cameras.get(1);
                 } else {
                     videoSource = cameras.get(0);
                 }
