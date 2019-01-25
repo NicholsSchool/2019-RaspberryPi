@@ -77,9 +77,10 @@ import org.opencv.imgproc.Moments;
 public final class Main {
     private static String configFile = "/boot/frc.json";
 
-    private static final int CAMERA_RESOLUTION_X = 320, CAMERA_RESOLUTION_Y = 240, CAMERA_FPS = 30;
+    private static final int CAMERA_RESOLUTION_X = 160, CAMERA_RESOLUTION_Y = 120, CAMERA_FPS = 30;
+    private static final int NUM_OF_CAMERAS = 2;
 
-    @SuppressWarnings("MemberName")
+   //  @SuppressWarnings("MemberName")
     public static class CameraConfig {
         public String name;
         public String path;
@@ -135,7 +136,7 @@ public final class Main {
     /**
      * Read configuration file.
      */
-    @SuppressWarnings("PMD.CyclomaticComplexity")
+    // @SuppressWarnings("PMD.CyclomaticComplexity")
     public static boolean readConfig() {
         // parse file
         JsonElement top;
@@ -236,7 +237,6 @@ public final class Main {
 
         public double x;
         public double y;
-        public long lastUpdate;
 
         @Override
         public void process(Mat src) {
@@ -264,11 +264,11 @@ public final class Main {
             for (MatOfPoint contour : contours) {
 
                 // Only include large contours
-                if (Imgproc.contourArea(contour) > 750) {
+                if (Imgproc.contourArea(contour) > CAMERA_RESOLUTION_X * CAMERA_RESOLUTION_Y / 50) {
                     // Convert format
                     MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
 
-                    // Epsilon will be 5% of the perimeter, a lower epsilon will result in more
+                    // Epsilon will be 2% of the perimeter, a lower epsilon will result in more
                     // vertices
                     double epsilon = 0.02 * Imgproc.arcLength(contour2f, true);
 
@@ -278,17 +278,17 @@ public final class Main {
                     // Draw the polygon if it has 4 vertices
                     if (contour2f.rows() == 4) {
                         Moments m = Imgproc.moments(contour);
+                        // position of the center of mass
                         x = m.m10 / m.m00;
                         y = m.m01 / m.m00;
-                        lastUpdate = System.currentTimeMillis();
-                        Imgproc.drawContours(src, Arrays.asList(new MatOfPoint(contour2f.toArray())), -1,
+                        Imgproc.drawContours(dst, Arrays.asList(new MatOfPoint(contour2f.toArray())), -1,
                                 new Scalar(0, 0, 255), 2);
-                        Imgproc.circle(src, new Point(x, y), 5, new Scalar(255, 0, 0));
+                        Imgproc.circle(dst, new Point(x, y), 2, new Scalar(0, 0, 255));
                     }
                 }
             }
 
-            dst = src;
+            // dst = src;
 
         }
 
@@ -327,20 +327,17 @@ public final class Main {
         }
 
         // start image processing on camera 0 if present
-        if (cameras.size() == 2) {
+        if (cameras.size() == NUM_OF_CAMERAS) {
             CvSource outputStream = CameraServer.getInstance().putVideo("Vision Pipline Output", CAMERA_RESOLUTION_X,
                     CAMERA_RESOLUTION_Y);
 
             VideoSource videoSource = cameras.get(0);
             CargoPipeline visionPipeline = new CargoPipeline();
             Listener<CargoPipeline> callback = pipeline -> {
-                // do something with pipeline results
-                // System.out.println("Detected " + pipeline.detected + " line(s)!");
-                outputStream.putFrame(pipeline.dst);
-
                 NetworkTableInstance.getDefault().getTable("pi").getEntry("lineX").setDouble(pipeline.x / CAMERA_RESOLUTION_X);
                 NetworkTableInstance.getDefault().getTable("pi").getEntry("lineY").setDouble(pipeline.y / CAMERA_RESOLUTION_Y);
-                NetworkTableInstance.getDefault().getTable("pi").getEntry("lastUpdate").setNumber(pipeline.lastUpdate);
+
+                outputStream.putFrame(pipeline.dst);
             };
 
             VisionThread visionThread = new VisionThread(videoSource, visionPipeline, callback);
