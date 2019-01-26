@@ -77,10 +77,12 @@ import org.opencv.imgproc.Moments;
 public final class Main {
     private static String configFile = "/boot/frc.json";
 
-    private static final int CAMERA_RESOLUTION_X = 160, CAMERA_RESOLUTION_Y = 120, CAMERA_FPS = 30;
+    private static final int CAMERA_RESOLUTION_X = 176, CAMERA_RESOLUTION_Y = 144, CAMERA_FPS = 30;
     private static final int NUM_OF_CAMERAS = 2;
+    private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0),
+            RED = new Scalar(0, 0, 255);
 
-   //  @SuppressWarnings("MemberName")
+    // @SuppressWarnings("MemberName")
     public static class CameraConfig {
         public String name;
         public String path;
@@ -237,6 +239,8 @@ public final class Main {
 
         public double x;
         public double y;
+        public double vx;
+        public double vy;
 
         @Override
         public void process(Mat src) {
@@ -250,7 +254,7 @@ public final class Main {
             Imgproc.cvtColor(src, dst, Imgproc.COLOR_BGR2GRAY);
 
             // Separate bright areas from dark areas
-            Imgproc.threshold(dst, dst, 190, 255, Imgproc.THRESH_BINARY);
+            Imgproc.threshold(dst, dst, 127, 255, Imgproc.THRESH_BINARY);
 
             // Find all external contours
             ArrayList<MatOfPoint> contours = new ArrayList<>();
@@ -260,35 +264,46 @@ public final class Main {
                 System.out.println(e.getMessage());
             }
 
+            dst = src;
+
             // Approximate contours with polygons
             for (MatOfPoint contour : contours) {
 
                 // Only include large contours
-                if (Imgproc.contourArea(contour) > CAMERA_RESOLUTION_X * CAMERA_RESOLUTION_Y / 50) {
+                if (Imgproc.contourArea(contour) > CAMERA_RESOLUTION_X * CAMERA_RESOLUTION_Y / 60) {
                     // Convert format
                     MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
 
-                    // Epsilon will be 2% of the perimeter, a lower epsilon will result in more
+                    // Epsilon will be 4% of the perimeter, a lower epsilon will result in more
                     // vertices
-                    double epsilon = 0.02 * Imgproc.arcLength(contour2f, true);
+                    double epsilon = 0.04 * Imgproc.arcLength(contour2f, true);
 
                     // Approximate contour to polygon using the Ramer-Douglas-Peucker algorithm
                     Imgproc.approxPolyDP(contour2f, contour2f, epsilon, true);
 
-                    // Draw the polygon if it has 4 vertices
-                    if (contour2f.rows() == 4) {
-                        Moments m = Imgproc.moments(contour);
-                        // position of the center of mass
-                        x = m.m10 / m.m00;
-                        y = m.m01 / m.m00;
-                        Imgproc.drawContours(dst, Arrays.asList(new MatOfPoint(contour2f.toArray())), -1,
-                                new Scalar(0, 0, 255), 2);
-                        Imgproc.circle(dst, new Point(x, y), 2, new Scalar(0, 0, 255));
+                    contour = new MatOfPoint(contour2f.toArray());
+
+                    // Process the polygon if it has 4 vertices and is convex
+                    if (contour.rows() == 4 && Imgproc.isContourConvex(contour)) {
+
+                        // Get the best fit line
+                        Mat line = new Mat();
+                        Imgproc.fitLine(contour2f, line, Imgproc.DIST_L2, 0, 0.01, 0.01);
+                        vx = line.get(0, 0)[0];
+                        vy = line.get(1, 0)[0];
+                        x = line.get(2, 0)[0];
+                        y = line.get(3, 0)[0];
+
+                        // Draw the contour
+                        Imgproc.drawContours(dst, Arrays.asList(contour), -1, GREEN, 2);
+                        // Draw the line
+                        Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), GREEN, 2);
+                    } else {
+                        // Draw the contour
+                        Imgproc.drawContours(dst, Arrays.asList(contour), -1, RED, 2);
                     }
                 }
             }
-
-            // dst = src;
 
         }
 
@@ -334,8 +349,15 @@ public final class Main {
             VideoSource videoSource = cameras.get(0);
             CargoPipeline visionPipeline = new CargoPipeline();
             Listener<CargoPipeline> callback = pipeline -> {
-                NetworkTableInstance.getDefault().getTable("pi").getEntry("lineX").setDouble(pipeline.x / CAMERA_RESOLUTION_X);
-                NetworkTableInstance.getDefault().getTable("pi").getEntry("lineY").setDouble(pipeline.y / CAMERA_RESOLUTION_Y);
+
+                // x, y, vx, vy values should all be between 0 and 1
+                NetworkTableInstance.getDefault().getTable("vision").getEntry("x")
+                        .setDouble(pipeline.x / CAMERA_RESOLUTION_X);
+                NetworkTableInstance.getDefault().getTable("vision").getEntry("y")
+                        .setDouble(pipeline.y / CAMERA_RESOLUTION_Y);
+
+                NetworkTableInstance.getDefault().getTable("vision").getEntry("vx").setDouble(pipeline.vx);
+                NetworkTableInstance.getDefault().getTable("vision").getEntry("vy").setDouble(pipeline.vy);
 
                 outputStream.putFrame(pipeline.dst);
             };
