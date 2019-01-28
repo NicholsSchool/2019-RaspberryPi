@@ -222,7 +222,8 @@ public final class Main {
     public static class CargoPipeline implements VisionPipeline {
 
         private static final int THRESHOLD = 180;
-        private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0), RED = new Scalar(0, 0, 255);
+        private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0),
+                RED = new Scalar(0, 0, 255);
 
         public Mat dst;
 
@@ -252,6 +253,7 @@ public final class Main {
 
             dst = src;
 
+            // List to hold detected possible cargo lines
             ArrayList<MatOfPoint> detected = new ArrayList<MatOfPoint>();
 
             // Approximate contours with polygons
@@ -271,7 +273,7 @@ public final class Main {
                     // Convert format back
                     contour = new MatOfPoint(contour2f.toArray());
 
-                    // Add the polygon to an array of possible cargo lines if it has 4 vertices and
+                    // Add the polygon to the list of possible cargo lines if it has 4 vertices and
                     // is convex
                     if (contour.rows() == 4 && Imgproc.isContourConvex(contour)) {
                         detected.add(contour);
@@ -282,20 +284,23 @@ public final class Main {
                 Imgproc.drawContours(dst, Arrays.asList(contour), -1, RED, 1);
             }
 
-            // Assume the line is the median of the possible cargo lines
-            MatOfPoint line = detected.get(detected.size() / 2);
-            // Get the best fit line
-            Mat fit = new Mat();
-            Imgproc.fitLine(line, fit, Imgproc.DIST_L2, 0, 0.01, 0.01);
-            vx = fit.get(0, 0)[0];
-            vy = fit.get(1, 0)[0];
-            x = fit.get(2, 0)[0];
-            y = fit.get(3, 0)[0];
+            if (!detected.isEmpty()) {
+                // Assume the line is the median of the possible cargo lines
+                MatOfPoint line = detected.get(detected.size() / 2);
+                
+                // Get the best fit line
+                Mat fit = new Mat();
+                Imgproc.fitLine(line, fit, Imgproc.DIST_L2, 0, 0.01, 0.01);
+                vx = fit.get(0, 0)[0];
+                vy = fit.get(1, 0)[0];
+                x = fit.get(2, 0)[0];
+                y = fit.get(3, 0)[0];
 
-            // Draw the contour
-            Imgproc.drawContours(dst, Arrays.asList(line), -1, GREEN, 2);
-            // Draw the best fit line
-            Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
+                // Draw the contour
+                Imgproc.drawContours(dst, Arrays.asList(line), -1, GREEN, 2);
+                // Draw the best fit line
+                Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
+            }
 
         }
 
@@ -368,9 +373,9 @@ public final class Main {
                 }
 
                 // if (videoSource == cameras.get(0)) {
-                //     // videoSource = cameras.get(1);
+                // // videoSource = cameras.get(1);
                 // } else {
-                //     videoSource = cameras.get(0);
+                // videoSource = cameras.get(0);
                 // }
 
                 // visionThread.interrupt();
