@@ -30,6 +30,7 @@ import edu.wpi.first.vision.VisionPipeline;
 import edu.wpi.first.vision.VisionThread;
 import edu.wpi.first.vision.VisionRunner.Listener;
 
+import org.opencv.core.Core;
 import org.opencv.core.CvException;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
@@ -37,7 +38,6 @@ import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
-import org.opencv.imgproc.Moments;
 
 /*
    JSON format:
@@ -79,8 +79,6 @@ public final class Main {
 
     private static final int CAMERA_RESOLUTION_X = 176, CAMERA_RESOLUTION_Y = 144, CAMERA_FPS = 30;
     private static final int NUM_OF_CAMERAS = 2;
-    private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0),
-            RED = new Scalar(0, 0, 255);
 
     // @SuppressWarnings("MemberName")
     public static class CameraConfig {
@@ -217,23 +215,14 @@ public final class Main {
     }
 
     /**
-     * Example pipeline.
-     */
-    public static class MyPipeline implements VisionPipeline {
-        public int val;
-
-        @Override
-        public void process(Mat mat) {
-            val += 1;
-        }
-    }
-
-    /**
      * Get cargo lines using contour analysis.
      * 
      * @author Junqi Wu
      */
     public static class CargoPipeline implements VisionPipeline {
+
+        private static final int THRESHOLD = 180;
+        private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0), RED = new Scalar(0, 0, 255);
 
         public Mat dst;
 
@@ -250,11 +239,8 @@ public final class Main {
 
             dst = new Mat();
 
-            // Convert to grayscale
-            Imgproc.cvtColor(src, dst, Imgproc.COLOR_BGR2GRAY);
-
-            // Separate bright areas from dark areas
-            Imgproc.threshold(dst, dst, 127, 255, Imgproc.THRESH_BINARY);
+            // Extract whites
+            Core.inRange(src, new Scalar(THRESHOLD, THRESHOLD, THRESHOLD), new Scalar(255, 255, 255), dst);
 
             // Find all external contours
             ArrayList<MatOfPoint> contours = new ArrayList<>();
@@ -266,11 +252,12 @@ public final class Main {
 
             dst = src;
 
+            ArrayList<MatOfPoint> detected = new ArrayList<MatOfPoint>();
+
             // Approximate contours with polygons
             for (MatOfPoint contour : contours) {
-
-                // Only include large contours
-                if (Imgproc.contourArea(contour) > CAMERA_RESOLUTION_X * CAMERA_RESOLUTION_Y / 60) {
+                // Only include contours larger than 1/60 of the screen
+                if (Imgproc.contourArea(contour) > dst.width() * dst.height() / 60) {
                     // Convert format
                     MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
 
@@ -278,32 +265,37 @@ public final class Main {
                     // vertices
                     double epsilon = 0.04 * Imgproc.arcLength(contour2f, true);
 
-                    // Approximate contour to polygon using the Ramer-Douglas-Peucker algorithm
+                    // Approximate contour to polygon
                     Imgproc.approxPolyDP(contour2f, contour2f, epsilon, true);
 
+                    // Convert format back
                     contour = new MatOfPoint(contour2f.toArray());
 
-                    // Process the polygon if it has 4 vertices and is convex
+                    // Add the polygon to an array of possible cargo lines if it has 4 vertices and
+                    // is convex
                     if (contour.rows() == 4 && Imgproc.isContourConvex(contour)) {
-
-                        // Get the best fit line
-                        Mat line = new Mat();
-                        Imgproc.fitLine(contour2f, line, Imgproc.DIST_L2, 0, 0.01, 0.01);
-                        vx = line.get(0, 0)[0];
-                        vy = line.get(1, 0)[0];
-                        x = line.get(2, 0)[0];
-                        y = line.get(3, 0)[0];
-
-                        // Draw the contour
-                        Imgproc.drawContours(dst, Arrays.asList(contour), -1, GREEN, 2);
-                        // Draw the line
-                        Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), GREEN, 2);
-                    } else {
-                        // Draw the contour
-                        Imgproc.drawContours(dst, Arrays.asList(contour), -1, RED, 2);
+                        detected.add(contour);
                     }
                 }
+
+                // Draw the contour
+                Imgproc.drawContours(dst, Arrays.asList(contour), -1, RED, 1);
             }
+
+            // Assume the line is the median of the possible cargo lines
+            MatOfPoint line = detected.get(detected.size() / 2);
+            // Get the best fit line
+            Mat fit = new Mat();
+            Imgproc.fitLine(line, fit, Imgproc.DIST_L2, 0, 0.01, 0.01);
+            vx = fit.get(0, 0)[0];
+            vy = fit.get(1, 0)[0];
+            x = fit.get(2, 0)[0];
+            y = fit.get(3, 0)[0];
+
+            // Draw the contour
+            Imgproc.drawContours(dst, Arrays.asList(line), -1, GREEN, 2);
+            // Draw the best fit line
+            Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
 
         }
 
@@ -363,15 +355,11 @@ public final class Main {
             };
 
             VisionThread visionThread = new VisionThread(videoSource, visionPipeline, callback);
-            /*
-             * something like this for GRIP: VisionThread visionThread = new
-             * VisionThread(cameras.get(0), new GripPipeline(), pipeline -> { ... });
-             */
             visionThread.start();
 
             // loop forever
             while (true) {
-                System.out.println("Switching cameras in 5 seconds");
+                // System.out.println("Switching cameras in 5 seconds");
 
                 try {
                     Thread.sleep(5000);
@@ -379,15 +367,15 @@ public final class Main {
                     return;
                 }
 
-                if (videoSource == cameras.get(0)) {
-                    // videoSource = cameras.get(1);
-                } else {
-                    videoSource = cameras.get(0);
-                }
+                // if (videoSource == cameras.get(0)) {
+                //     // videoSource = cameras.get(1);
+                // } else {
+                //     videoSource = cameras.get(0);
+                // }
 
-                visionThread.interrupt();
-                visionThread = new VisionThread(videoSource, visionPipeline, callback);
-                visionThread.start();
+                // visionThread.interrupt();
+                // visionThread = new VisionThread(videoSource, visionPipeline, callback);
+                // visionThread.start();
             }
         } else {
             System.out.println("ERROR: ONLY " + cameras.size() + " CAMERA(S) ARE CONNECTED");
