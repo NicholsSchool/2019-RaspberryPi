@@ -36,6 +36,7 @@ import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
+import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 
@@ -223,7 +224,7 @@ public final class Main {
 
         private static final int THRESHOLD = 180;
         private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0),
-                RED = new Scalar(0, 0, 255);
+                RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255);
 
         public Mat dst;
 
@@ -231,6 +232,7 @@ public final class Main {
         public double y;
         public double vx;
         public double vy;
+        public RotatedRect rect;
 
         @Override
         public void process(Mat src) {
@@ -287,7 +289,7 @@ public final class Main {
             if (!detected.isEmpty()) {
                 // Assume the line is the median of the possible cargo lines
                 MatOfPoint line = detected.get(detected.size() / 2);
-                
+
                 // Get the best fit line
                 Mat fit = new Mat();
                 Imgproc.fitLine(line, fit, Imgproc.DIST_L2, 0, 0.01, 0.01);
@@ -296,10 +298,19 @@ public final class Main {
                 x = fit.get(2, 0)[0];
                 y = fit.get(3, 0)[0];
 
+                // Get the bounding rect
+                rect = Imgproc.minAreaRect(new MatOfPoint2f(line.toArray()));
+
                 // Draw the contour
                 Imgproc.drawContours(dst, Arrays.asList(line), -1, GREEN, 2);
                 // Draw the best fit line
                 Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
+                // Draw the bounding rect
+                Point[] vertices = new Point[4];
+                rect.points(vertices);
+                for (int i = 0; i < vertices.length; i++) {
+                    Imgproc.line(dst, vertices[i], vertices[(i + 1) % 4], YELLOW, 1);
+                }
             }
 
         }
@@ -355,6 +366,8 @@ public final class Main {
 
                 NetworkTableInstance.getDefault().getTable("vision").getEntry("vx").setDouble(pipeline.vx);
                 NetworkTableInstance.getDefault().getTable("vision").getEntry("vy").setDouble(pipeline.vy);
+
+                NetworkTableInstance.getDefault().getTable("vision").getEntry("rect").setValue(pipeline.rect);
 
                 outputStream.putFrame(pipeline.dst);
             };
