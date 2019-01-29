@@ -25,6 +25,7 @@ import edu.wpi.cscore.MjpegServer;
 import edu.wpi.cscore.UsbCamera;
 import edu.wpi.cscore.VideoSource;
 import edu.wpi.first.cameraserver.CameraServer;
+import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.vision.VisionPipeline;
 import edu.wpi.first.vision.VisionThread;
@@ -225,6 +226,8 @@ public final class Main {
         private static final int THRESHOLD = 180;
         private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0),
                 RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255);
+        private static final int CAMERA_FOV = 68;
+        private static final double TAPE_WIDTH = 0.25;
 
         public Mat dst;
 
@@ -232,7 +235,8 @@ public final class Main {
         public double y;
         public double vx;
         public double vy;
-        public RotatedRect rect;
+        public double distance;
+        public double rotation;
 
         @Override
         public void process(Mat src) {
@@ -299,7 +303,26 @@ public final class Main {
                 y = fit.get(3, 0)[0];
 
                 // Get the bounding rect
-                rect = Imgproc.minAreaRect(new MatOfPoint2f(line.toArray()));
+                RotatedRect rect = Imgproc.minAreaRect(new MatOfPoint2f(line.toArray()));
+
+                // Get the center
+                x = rect.center.x;
+                y = rect.center.y;
+
+                // Get the distance
+                double width = Math.min(rect.size.height, rect.size.width);
+                double angularWidth = width / dst.width() * CAMERA_FOV;
+                distance = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
+
+                // Get the difference in rotation between the robot and the line
+                // rect.angle is from vertical
+                if (rect.angle > 45) {
+                    rotation = rect.angle - 90;
+                } else if (rect.angle < -45) {
+                    rotation = rect.angle + 90;
+                } else {
+                    rotation = rect.angle;
+                }
 
                 // Draw the contour
                 Imgproc.drawContours(dst, Arrays.asList(line), -1, GREEN, 2);
@@ -358,16 +381,16 @@ public final class Main {
             CargoPipeline visionPipeline = new CargoPipeline();
             Listener<CargoPipeline> callback = pipeline -> {
 
+                NetworkTable table = NetworkTableInstance.getDefault().getTable("vision");
+
                 // x, y, vx, vy values should all be between 0 and 1
-                NetworkTableInstance.getDefault().getTable("vision").getEntry("x")
-                        .setDouble(pipeline.x / CAMERA_RESOLUTION_X);
-                NetworkTableInstance.getDefault().getTable("vision").getEntry("y")
-                        .setDouble(pipeline.y / CAMERA_RESOLUTION_Y);
+                table.getEntry("x").setDouble(pipeline.x / CAMERA_RESOLUTION_X);
+                table.getEntry("y").setDouble(pipeline.y / CAMERA_RESOLUTION_Y);
+                table.getEntry("vx").setDouble(pipeline.vx);
+                table.getEntry("vy").setDouble(pipeline.vy);
 
-                NetworkTableInstance.getDefault().getTable("vision").getEntry("vx").setDouble(pipeline.vx);
-                NetworkTableInstance.getDefault().getTable("vision").getEntry("vy").setDouble(pipeline.vy);
-
-                NetworkTableInstance.getDefault().getTable("vision").getEntry("rect").setValue(pipeline.rect);
+                table.getEntry("distance").setDouble(pipeline.distance);
+                table.getEntry("rotation").setDouble(pipeline.rotation);
 
                 outputStream.putFrame(pipeline.dst);
             };
