@@ -225,16 +225,14 @@ public final class Main {
 
         private static final int THRESHOLD = 180;
         private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0),
-                RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255);
-        private static final int CAMERA_FOV = 68;
-        private static final double TAPE_WIDTH = 0.25;
+                RED = new Scalar(0, 0, 255);
+        private static final int HORIZONTAL_FOV = 51;
+        private static final double TAPE_WIDTH = 2; // in inches
 
         public Mat dst;
 
         public double x;
         public double y;
-        public double vx;
-        public double vy;
         public double distance;
         public double rotation;
 
@@ -259,8 +257,9 @@ public final class Main {
 
             dst = src;
 
-            // List to hold detected possible cargo lines
-            ArrayList<MatOfPoint> detected = new ArrayList<MatOfPoint>();
+            MatOfPoint realLine = null;
+            RotatedRect realLineRect = null;
+            double highestRatio = 0;
 
             // Approximate contours with polygons
             for (MatOfPoint contour : contours) {
@@ -279,63 +278,103 @@ public final class Main {
                     // Convert format back
                     contour = new MatOfPoint(contour2f.toArray());
 
-                    // Add the polygon to the list of possible cargo lines if it has 4 vertices and
-                    // is convex
+                    // Check to see if the polygon is the lin if it has 4 vertices and is convex
                     if (contour.rows() == 4 && Imgproc.isContourConvex(contour)) {
-                        detected.add(contour);
+                        // Get the bounding rect
+                        RotatedRect rect = Imgproc.minAreaRect(contour2f);
+                        double h = rect.size.height;
+                        double w = rect.size.width;
+                        double ratio = Math.max(h, w) / Math.min(h, w);
+
+                        // The "real" line will be the longest rectangle
+                        if (ratio > highestRatio) {
+                            realLine = contour;
+                            realLineRect = rect;
+                            highestRatio = ratio;
+                        }
+                    } else {
+                        // Draw the contour
+                        Imgproc.drawContours(dst, Arrays.asList(contour), -1, RED, 1);
                     }
-                }
-
-                // Draw the contour
-                Imgproc.drawContours(dst, Arrays.asList(contour), -1, RED, 1);
-            }
-
-            if (!detected.isEmpty()) {
-                // Assume the line is the median of the possible cargo lines
-                MatOfPoint line = detected.get(detected.size() / 2);
-
-                // Get the best fit line
-                Mat fit = new Mat();
-                Imgproc.fitLine(line, fit, Imgproc.DIST_L2, 0, 0.01, 0.01);
-                vx = fit.get(0, 0)[0];
-                vy = fit.get(1, 0)[0];
-                x = fit.get(2, 0)[0];
-                y = fit.get(3, 0)[0];
-
-                // Get the bounding rect
-                RotatedRect rect = Imgproc.minAreaRect(new MatOfPoint2f(line.toArray()));
-
-                // Get the center
-                x = rect.center.x;
-                y = rect.center.y;
-
-                // Get the distance
-                double width = Math.min(rect.size.height, rect.size.width);
-                double angularWidth = width / dst.width() * CAMERA_FOV;
-                distance = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
-
-                // Get the difference in rotation between the robot and the line
-                // rect.angle is from vertical
-                if (rect.angle > 45) {
-                    rotation = rect.angle - 90;
-                } else if (rect.angle < -45) {
-                    rotation = rect.angle + 90;
                 } else {
-                    rotation = rect.angle;
-                }
-
-                // Draw the contour
-                Imgproc.drawContours(dst, Arrays.asList(line), -1, GREEN, 2);
-                // Draw the best fit line
-                Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
-                // Draw the bounding rect
-                Point[] vertices = new Point[4];
-                rect.points(vertices);
-                for (int i = 0; i < vertices.length; i++) {
-                    Imgproc.line(dst, vertices[i], vertices[(i + 1) % 4], YELLOW, 1);
+                    // Draw the contour
+                    Imgproc.drawContours(dst, Arrays.asList(contour), -1, RED, 1);
                 }
             }
 
+            if (!(realLine == null)) {
+                // Draw the contour
+                Imgproc.drawContours(dst, Arrays.asList(realLine), -1, GREEN, 2);
+
+                // processRect(realLineRect);
+                processContour(realLine);
+            }
+
+        }
+
+        private void processRect(RotatedRect rect) {
+            x = rect.center.x;
+            y = rect.center.y;
+
+            // Get the distance
+            double width = Math.min(rect.size.height, rect.size.width);
+            double angularWidth = width / dst.width() * HORIZONTAL_FOV;
+            distance = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
+
+            // Get the difference in rotation between the robot and the line
+            // realLine.angle is from vertical
+            if (rect.angle > 45) {
+                rotation = rect.angle - 90;
+            } else if (rect.angle < -45) {
+                rotation = rect.angle + 90;
+            } else {
+                rotation = rect.angle;
+            }
+
+            // Draw the bounding rect
+            Point[] vertices = new Point[4];
+            rect.points(vertices);
+            for (int i = 0; i < vertices.length; i++) {
+                Imgproc.line(dst, vertices[i], vertices[(i + 1) % 4], BLUE, 1);
+            }
+        }
+
+        private void processContour(MatOfPoint contour) {
+            // Get the best fit line
+            Mat fit = new Mat();
+            Imgproc.fitLine(contour, fit, Imgproc.DIST_L2, 0, 0.01, 0.01);
+            double vx = fit.get(0, 0)[0];
+            double vy = fit.get(1, 0)[0];
+            x = fit.get(2, 0)[0];
+            y = fit.get(3, 0)[0];
+
+            // Get the rotation
+            double angle = Math.atan(-vy / vx);
+            double complementary = Math.PI / 2 - Math.abs(angle);
+            double fromVertical = Math.copySign(complementary, angle);
+            rotation = fromVertical * 180 / Math.PI;
+
+            // Get the bottom two vertices
+            double[] lowest = new double[2];
+            double[] second = new double[2];
+            for (int i = 0; i < contour.rows(); i++) {
+                double[] p = contour.get(i, 0);
+                if (p[1] > lowest[1]) {
+                    lowest = p;
+                } else if (p[1] > second[1]) {
+                    second = p;
+                }
+            }
+
+            double deltaX = lowest[0] - second[0];
+            double deltaY = lowest[1] - second[1];
+            double width = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            // double width = Math.abs(lowest[0] - second[0]);
+            double angularWidth = width / dst.width() * HORIZONTAL_FOV;
+            distance = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
+
+            // Draw the best fit line
+            Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
         }
 
     }
@@ -383,11 +422,8 @@ public final class Main {
 
                 NetworkTable table = NetworkTableInstance.getDefault().getTable("vision");
 
-                // x, y, vx, vy values should all be between 0 and 1
                 table.getEntry("x").setDouble(pipeline.x / CAMERA_RESOLUTION_X);
                 table.getEntry("y").setDouble(pipeline.y / CAMERA_RESOLUTION_Y);
-                table.getEntry("vx").setDouble(pipeline.vx);
-                table.getEntry("vy").setDouble(pipeline.vy);
 
                 table.getEntry("distance").setDouble(pipeline.distance);
                 table.getEntry("rotation").setDouble(pipeline.rotation);
