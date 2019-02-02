@@ -79,7 +79,7 @@ import org.opencv.imgproc.Imgproc;
 public final class Main {
     private static String configFile = "/boot/frc.json";
 
-    private static final int CAMERA_RESOLUTION_X = 176, CAMERA_RESOLUTION_Y = 144, CAMERA_FPS = 30;
+    private static final int CAMERA_RESOLUTION_X = 320, CAMERA_RESOLUTION_Y = 240, CAMERA_FPS = 30;
     private static final int NUM_OF_CAMERAS = 2;
 
     // @SuppressWarnings("MemberName")
@@ -223,16 +223,15 @@ public final class Main {
      */
     public static class CargoPipeline implements VisionPipeline {
 
-        private static final int THRESHOLD = 180;
+        private static final int THRESHOLD = 160;
         private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0),
-                RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255);
-        private static final int HORIZONTAL_FOV = 51;
+                RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255);
+        private static final int HORIZONTAL_FOV = 58;
         private static final double TAPE_WIDTH = 2; // in inches
 
         public Mat dst;
 
-        public double x;
-        public double y;
+        public double angularDistance;
         public double distance;
         public double rotation;
 
@@ -259,18 +258,18 @@ public final class Main {
 
             MatOfPoint realLine = null;
             RotatedRect realLineRect = null;
-            double highestRatio = 0;
+            double closest = 1;
 
             // Approximate contours with polygons
             for (MatOfPoint contour : contours) {
                 // Only include contours larger than 1/100 of the screen
-                if (Imgproc.contourArea(contour) > dst.width() * dst.height() / 100) {
+                if (Imgproc.contourArea(contour) > dst.width() * dst.height() / 120) {
                     // Convert format
                     MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
 
-                    // Epsilon will be 2.5% of the perimeter, a lower epsilon will result in more
+                    // Epsilon will be 2% of the perimeter, a lower epsilon will result in more
                     // vertices
-                    double epsilon = 0.025 * Imgproc.arcLength(contour2f, true);
+                    double epsilon = 0.02 * Imgproc.arcLength(contour2f, true);
 
                     // Approximate contour to polygon
                     Imgproc.approxPolyDP(contour2f, contour2f, epsilon, true);
@@ -278,23 +277,28 @@ public final class Main {
                     // Convert format back
                     contour = new MatOfPoint(contour2f.toArray());
 
-                    // Check to see if the polygon is the lin if it has 4 vertices and is convex
+                    // Do the checks if it has 4 vertices and is convex
                     if (contour.rows() == 4 && Imgproc.isContourConvex(contour)) {
+                        Imgproc.drawContours(dst, Arrays.asList(contour), -1, YELLOW, 1);
+
                         // Get the bounding rect
                         RotatedRect rect = Imgproc.minAreaRect(contour2f);
                         double h = rect.size.height;
                         double w = rect.size.width;
                         double ratio = Math.max(h, w) / Math.min(h, w);
 
-                        // The "real" line will be the longest rectangle
-                        if (ratio > highestRatio) {
+                        double distanceFromCenter = Math.abs(0.5 - rect.center.x / CAMERA_RESOLUTION_X);
+
+                        // The "real" line will be the rectanlge cloest to the center and beyond a
+                        // certain length to width ratio
+                        if (ratio > 2 && distanceFromCenter < closest) {
                             realLine = contour;
                             realLineRect = rect;
-                            highestRatio = ratio;
+                            closest = distanceFromCenter;
                         }
                     } else {
                         // Draw the contour
-                        Imgproc.drawContours(dst, Arrays.asList(contour), -1, RED, 1);
+                        Imgproc.drawContours(dst, Arrays.asList(contour), -1, ORANGE, 1);
                     }
                 } else {
                     // Draw the contour
@@ -311,41 +315,47 @@ public final class Main {
                 Imgproc.fitLine(realLine, fit, Imgproc.DIST_L2, 0, 0.01, 0.01);
                 double vx = fit.get(0, 0)[0];
                 double vy = fit.get(1, 0)[0];
-                x = fit.get(2, 0)[0];
-                y = fit.get(3, 0)[0];
+                if(vy > 0) {
+                    vx *= -1;
+                    vy *= -1;
+                }
 
                 // Get the rotation
                 double angle = Math.atan(-vy / vx);
-                double complementary = Math.PI / 2 - Math.abs(angle);
-                double fromVertical = Math.copySign(complementary, angle);
-                rotation = fromVertical * 180 / Math.PI;
+                if (angle < 0) {
+                    angle += Math.PI;
+                }
+                rotation = -(angle * 180 / Math.PI - 90);
 
                 // Get the bottom two vertices
-                double[] lowest = new double[2];
-                double[] second = new double[2];
+                double[] lowest = { 0, 0 };
+                double[] second = { 0, 0 };
                 for (int i = 0; i < realLine.rows(); i++) {
                     double[] p = realLine.get(i, 0);
                     if (p[1] > lowest[1]) {
+                        second = lowest;
                         lowest = p;
                     } else if (p[1] > second[1]) {
                         second = p;
                     }
                 }
 
-                // x = (lowest[0] + second[0]) / 2;
-                // y = (lowest[1] + second[1]) / 2;
+                double x = (lowest[0] + second[0]) / 2;
+                double y = (lowest[1] + second[1]) / 2;
+
+                angularDistance = (x / CAMERA_RESOLUTION_X - 0.5) * HORIZONTAL_FOV;
 
                 // Get the distance with the contour
-                double deltaX = lowest[0] - second[0];
-                double deltaY = lowest[1] - second[1];
-                double width = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-                double angularWidth = width / dst.width() * HORIZONTAL_FOV;
-                distance = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
-
-                // Get the distance with the rect
-                // double width = Math.min(realLineRect.size.height, realLineRect.size.width);
+                // double deltaX = lowest[0] - second[0];
+                // double deltaY = lowest[1] - second[1];
+                // double width = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
                 // double angularWidth = width / dst.width() * HORIZONTAL_FOV;
                 // distance = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
+
+                // Get the distance with the rect
+                double width = Math.min(realLineRect.size.height, realLineRect.size.width);
+                double angularWidth = width / dst.width() * HORIZONTAL_FOV;
+                distance = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
 
                 // Draw the best fit line
                 Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
@@ -405,9 +415,7 @@ public final class Main {
 
                 NetworkTable table = NetworkTableInstance.getDefault().getTable("vision");
 
-                table.getEntry("x").setDouble(pipeline.x / CAMERA_RESOLUTION_X);
-                table.getEntry("y").setDouble(pipeline.y / CAMERA_RESOLUTION_Y);
-
+                table.getEntry("angularDistance").setDouble(pipeline.angularDistance);
                 table.getEntry("distance").setDouble(pipeline.distance);
                 table.getEntry("rotation").setDouble(pipeline.rotation);
 
