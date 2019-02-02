@@ -225,7 +225,7 @@ public final class Main {
 
         private static final int THRESHOLD = 180;
         private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0),
-                RED = new Scalar(0, 0, 255);
+                RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255);
         private static final int HORIZONTAL_FOV = 51;
         private static final double TAPE_WIDTH = 2; // in inches
 
@@ -263,14 +263,14 @@ public final class Main {
 
             // Approximate contours with polygons
             for (MatOfPoint contour : contours) {
-                // Only include contours larger than 1/60 of the screen
-                if (Imgproc.contourArea(contour) > dst.width() * dst.height() / 60) {
+                // Only include contours larger than 1/100 of the screen
+                if (Imgproc.contourArea(contour) > dst.width() * dst.height() / 100) {
                     // Convert format
                     MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
 
-                    // Epsilon will be 4% of the perimeter, a lower epsilon will result in more
+                    // Epsilon will be 2.5% of the perimeter, a lower epsilon will result in more
                     // vertices
-                    double epsilon = 0.04 * Imgproc.arcLength(contour2f, true);
+                    double epsilon = 0.025 * Imgproc.arcLength(contour2f, true);
 
                     // Approximate contour to polygon
                     Imgproc.approxPolyDP(contour2f, contour2f, epsilon, true);
@@ -306,75 +306,58 @@ public final class Main {
                 // Draw the contour
                 Imgproc.drawContours(dst, Arrays.asList(realLine), -1, GREEN, 2);
 
-                // processRect(realLineRect);
-                processContour(realLine);
-            }
+                // Get the best fit line
+                Mat fit = new Mat();
+                Imgproc.fitLine(realLine, fit, Imgproc.DIST_L2, 0, 0.01, 0.01);
+                double vx = fit.get(0, 0)[0];
+                double vy = fit.get(1, 0)[0];
+                x = fit.get(2, 0)[0];
+                y = fit.get(3, 0)[0];
 
-        }
+                // Get the rotation
+                double angle = Math.atan(-vy / vx);
+                double complementary = Math.PI / 2 - Math.abs(angle);
+                double fromVertical = Math.copySign(complementary, angle);
+                rotation = fromVertical * 180 / Math.PI;
 
-        private void processRect(RotatedRect rect) {
-            x = rect.center.x;
-            y = rect.center.y;
+                // Get the bottom two vertices
+                double[] lowest = new double[2];
+                double[] second = new double[2];
+                for (int i = 0; i < realLine.rows(); i++) {
+                    double[] p = realLine.get(i, 0);
+                    if (p[1] > lowest[1]) {
+                        lowest = p;
+                    } else if (p[1] > second[1]) {
+                        second = p;
+                    }
+                }
 
-            // Get the distance
-            double width = Math.min(rect.size.height, rect.size.width);
-            double angularWidth = width / dst.width() * HORIZONTAL_FOV;
-            distance = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
+                // x = (lowest[0] + second[0]) / 2;
+                // y = (lowest[1] + second[1]) / 2;
 
-            // Get the difference in rotation between the robot and the line
-            // realLine.angle is from vertical
-            if (rect.angle > 45) {
-                rotation = rect.angle - 90;
-            } else if (rect.angle < -45) {
-                rotation = rect.angle + 90;
-            } else {
-                rotation = rect.angle;
-            }
+                // Get the distance with the contour
+                double deltaX = lowest[0] - second[0];
+                double deltaY = lowest[1] - second[1];
+                double width = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                double angularWidth = width / dst.width() * HORIZONTAL_FOV;
+                distance = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
 
-            // Draw the bounding rect
-            Point[] vertices = new Point[4];
-            rect.points(vertices);
-            for (int i = 0; i < vertices.length; i++) {
-                Imgproc.line(dst, vertices[i], vertices[(i + 1) % 4], BLUE, 1);
-            }
-        }
+                // Get the distance with the rect
+                // double width = Math.min(realLineRect.size.height, realLineRect.size.width);
+                // double angularWidth = width / dst.width() * HORIZONTAL_FOV;
+                // distance = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
 
-        private void processContour(MatOfPoint contour) {
-            // Get the best fit line
-            Mat fit = new Mat();
-            Imgproc.fitLine(contour, fit, Imgproc.DIST_L2, 0, 0.01, 0.01);
-            double vx = fit.get(0, 0)[0];
-            double vy = fit.get(1, 0)[0];
-            x = fit.get(2, 0)[0];
-            y = fit.get(3, 0)[0];
+                // Draw the best fit line
+                Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
 
-            // Get the rotation
-            double angle = Math.atan(-vy / vx);
-            double complementary = Math.PI / 2 - Math.abs(angle);
-            double fromVertical = Math.copySign(complementary, angle);
-            rotation = fromVertical * 180 / Math.PI;
-
-            // Get the bottom two vertices
-            double[] lowest = new double[2];
-            double[] second = new double[2];
-            for (int i = 0; i < contour.rows(); i++) {
-                double[] p = contour.get(i, 0);
-                if (p[1] > lowest[1]) {
-                    lowest = p;
-                } else if (p[1] > second[1]) {
-                    second = p;
+                // Draw the bounding rect
+                Point[] vertices = new Point[4];
+                realLineRect.points(vertices);
+                for (int i = 0; i < vertices.length; i++) {
+                    Imgproc.line(dst, vertices[i], vertices[(i + 1) % 4], YELLOW, 1);
                 }
             }
 
-            double deltaX = lowest[0] - second[0];
-            double deltaY = lowest[1] - second[1];
-            double width = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-            // double width = Math.abs(lowest[0] - second[0]);
-            double angularWidth = width / dst.width() * HORIZONTAL_FOV;
-            distance = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
-
-            // Draw the best fit line
-            Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
         }
 
     }
