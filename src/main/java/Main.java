@@ -228,12 +228,13 @@ public final class Main {
                 RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255);
         private static final int HORIZONTAL_FOV = 58;
         private static final double TAPE_WIDTH = 2; // in inches
+        private static final double CAMERA_HEIGHT = 18; // in inches
 
         public Mat dst;
 
-        public double angularDistance;
-        public double distance;
-        public double rotation;
+        public double angleToLine;
+        public double distanceToLine;
+        public double angleToWall;
 
         @Override
         public void process(Mat src) {
@@ -251,6 +252,7 @@ public final class Main {
             try {
                 Imgproc.findContours(dst, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
             } catch (CvException e) {
+                // Sometimes the Mat format gets messed up when switching cameras
                 System.out.println(e.getMessage());
             }
 
@@ -287,14 +289,15 @@ public final class Main {
                         double w = rect.size.width;
                         double ratio = Math.max(h, w) / Math.min(h, w);
 
-                        double distanceFromCenter = Math.abs(0.5 - rect.center.x / CAMERA_RESOLUTION_X);
+                        // distance to center of the screen as a percentage
+                        double distanceToCenter = Math.abs(rect.center.x / CAMERA_RESOLUTION_X - 0.5);
 
-                        // The "real" line will be the rectanlge cloest to the center and beyond a
-                        // certain length to width ratio
-                        if (ratio > 2 && distanceFromCenter < closest) {
+                        // The "real" line will be the rectangle greater than a certain length to width
+                        // ratio that is closest to the center of the screen
+                        if (ratio > 2 && distanceToCenter < closest) {
                             realLine = contour;
                             realLineRect = rect;
-                            closest = distanceFromCenter;
+                            closest = distanceToCenter;
                         }
                     } else {
                         // Draw the contour
@@ -306,7 +309,7 @@ public final class Main {
                 }
             }
 
-            if (!(realLine == null)) {
+            if (realLine != null) {
                 // Draw the contour
                 Imgproc.drawContours(dst, Arrays.asList(realLine), -1, GREEN, 2);
 
@@ -315,17 +318,18 @@ public final class Main {
                 Imgproc.fitLine(realLine, fit, Imgproc.DIST_L2, 0, 0.01, 0.01);
                 double vx = fit.get(0, 0)[0];
                 double vy = fit.get(1, 0)[0];
-                if(vy > 0) {
+                // Change the vector so that it is facing upwards
+                if (vy > 0) {
                     vx *= -1;
                     vy *= -1;
                 }
 
-                // Get the rotation
+                // Get the rotation of the line which is the angle to the wall
                 double angle = Math.atan(-vy / vx);
-                if (angle < 0) {
-                    angle += Math.PI;
-                }
-                rotation = -(angle * 180 / Math.PI - 90);
+                // if (angle < 0) {
+                // angle += Math.PI;
+                // }
+                angleToWall = -(angle * 180 / Math.PI - 90);
 
                 // Get the bottom two vertices
                 double[] lowest = { 0, 0 };
@@ -343,7 +347,7 @@ public final class Main {
                 double x = (lowest[0] + second[0]) / 2;
                 double y = (lowest[1] + second[1]) / 2;
 
-                angularDistance = (x / CAMERA_RESOLUTION_X - 0.5) * HORIZONTAL_FOV;
+                angleToLine = (x / CAMERA_RESOLUTION_X - 0.5) * HORIZONTAL_FOV;
 
                 // Get the distance with the contour
                 // double deltaX = lowest[0] - second[0];
@@ -355,7 +359,8 @@ public final class Main {
                 // Get the distance with the rect
                 double width = Math.min(realLineRect.size.height, realLineRect.size.width);
                 double angularWidth = width / dst.width() * HORIZONTAL_FOV;
-                distance = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
+                distanceToLine = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
+                distanceToLine = Math.sqrt(distanceToLine * distanceToLine - CAMERA_HEIGHT * CAMERA_HEIGHT);
 
                 // Draw the best fit line
                 Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
@@ -415,9 +420,9 @@ public final class Main {
 
                 NetworkTable table = NetworkTableInstance.getDefault().getTable("vision");
 
-                table.getEntry("angularDistance").setDouble(pipeline.angularDistance);
-                table.getEntry("distance").setDouble(pipeline.distance);
-                table.getEntry("rotation").setDouble(pipeline.rotation);
+                table.getEntry("angleToLine").setDouble(pipeline.angleToLine);
+                table.getEntry("distanceToLine").setDouble(pipeline.distanceToLine);
+                table.getEntry("angleToWall").setDouble(pipeline.angleToWall);
 
                 outputStream.putFrame(pipeline.dst);
             };
