@@ -228,7 +228,7 @@ public final class Main {
                 RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255);
         private static final int HORIZONTAL_FOV = 58;
         private static final double TAPE_WIDTH = 2; // in inches
-        private static final double CAMERA_HEIGHT = 18; // in inches
+        private static final double CAMERA_HEIGHT = 21; // in inches
 
         public Mat dst;
 
@@ -264,8 +264,8 @@ public final class Main {
 
             // Approximate contours with polygons
             for (MatOfPoint contour : contours) {
-                // Only include contours larger than 1/100 of the screen
-                if (Imgproc.contourArea(contour) > dst.width() * dst.height() / 120) {
+                // Only include contours larger than 1/200 of the screen
+                if (Imgproc.contourArea(contour) > dst.width() * dst.height() / 200) {
                     // Convert format
                     MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
 
@@ -326,9 +326,9 @@ public final class Main {
 
                 // Get the rotation of the line which is the angle to the wall
                 double angle = Math.atan(-vy / vx);
-                // if (angle < 0) {
-                // angle += Math.PI;
-                // }
+                if (angle < 0) {
+                    angle += Math.PI;
+                }
                 angleToWall = -(angle * 180 / Math.PI - 90);
 
                 // Get the bottom two vertices
@@ -350,17 +350,19 @@ public final class Main {
                 angleToLine = (x / CAMERA_RESOLUTION_X - 0.5) * HORIZONTAL_FOV;
 
                 // Get the distance with the contour
-                // double deltaX = lowest[0] - second[0];
-                // double deltaY = lowest[1] - second[1];
-                // double width = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-                // double angularWidth = width / dst.width() * HORIZONTAL_FOV;
-                // distance = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
-
-                // Get the distance with the rect
-                double width = Math.min(realLineRect.size.height, realLineRect.size.width);
+                double deltaX = lowest[0] - second[0];
+                double deltaY = lowest[1] - second[1];
+                double width = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
                 double angularWidth = width / dst.width() * HORIZONTAL_FOV;
                 distanceToLine = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
                 distanceToLine = Math.sqrt(distanceToLine * distanceToLine - CAMERA_HEIGHT * CAMERA_HEIGHT);
+
+                // Get the distance with the rect
+                // double width = Math.min(realLineRect.size.height, realLineRect.size.width);
+                // double angularWidth = width / dst.width() * HORIZONTAL_FOV;
+                // distanceToLine = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
+                // distanceToLine = Math.sqrt(distanceToLine * distanceToLine - CAMERA_HEIGHT *
+                // CAMERA_HEIGHT);
 
                 // Draw the best fit line
                 Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
@@ -430,15 +432,22 @@ public final class Main {
             VisionThread visionThread = new VisionThread(videoSource, visionPipeline, callback);
             visionThread.start();
 
+            NetworkTable table = NetworkTableInstance.getDefault().getTable("vision");
+
             // loop forever
             while (true) {
                 // System.out.println("Switching cameras in 5 seconds");
 
                 try {
-                    Thread.sleep(5000);
+                    Thread.sleep(1000);
                 } catch (InterruptedException ex) {
                     return;
                 }
+
+                System.out.println("\n\n\n\n\n\n\n\n\n");
+                System.out.println("Angle To Line: " + table.getEntry("angleToLine").getDouble(0));
+                System.out.println("Distance To Line: " + table.getEntry("distanceToLine").getDouble(0));
+                System.out.println("Angle To Wall: " + table.getEntry("angleToWall").getDouble(0));
 
                 // if (videoSource == cameras.get(0)) {
                 // // videoSource = cameras.get(1);
