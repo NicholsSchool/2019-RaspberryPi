@@ -25,6 +25,9 @@ public class LinePipeline implements VisionPipeline {
     private static final double TAPE_WIDTH = 2 / 12d; // in feet
     private static final double CAMERA_HEIGHT = 21 / 12d; // in feet
 
+    private static final double CAMERA_OFFSET = 12 / 12d; // camera distance from the middle of the robot in feet
+    private static final double CAMERA_ANGLE_OFFSET_RATIO = 0.8; // the angle offset as a result from the camera offset
+
     public Mat dst;
 
     public double angleToLine;
@@ -191,6 +194,17 @@ public class LinePipeline implements VisionPipeline {
         // Imgproc.line(dst, vertices[i], vertices[(i + 1) % 4], YELLOW, 1);
         // }
 
+        correctHeading();
+    }
+
+    private void correctHeading() {
+        // the common side shared by the triangles formed by the observed angle to line
+        // and the actual angle to line
+        double commonSide = distanceToLine * Math.sin(angleToLine * Math.PI / 180);
+        
+        distanceToLine = Math.sqrt(distanceToLine * distanceToLine - CAMERA_OFFSET * CAMERA_OFFSET);
+
+        angleToLine = Math.asin(commonSide / distanceToLine) * 180 / Math.PI;
     }
 
 }
