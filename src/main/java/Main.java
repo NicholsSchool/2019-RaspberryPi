@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import com.google.gson.Gson;
@@ -25,21 +24,11 @@ import edu.wpi.cscore.MjpegServer;
 import edu.wpi.cscore.UsbCamera;
 import edu.wpi.cscore.VideoSource;
 import edu.wpi.first.cameraserver.CameraServer;
+import edu.wpi.first.networktables.EntryListenerFlags;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableInstance;
-import edu.wpi.first.vision.VisionPipeline;
 import edu.wpi.first.vision.VisionThread;
 import edu.wpi.first.vision.VisionRunner.Listener;
-
-import org.opencv.core.Core;
-import org.opencv.core.CvException;
-import org.opencv.core.Mat;
-import org.opencv.core.MatOfPoint;
-import org.opencv.core.MatOfPoint2f;
-import org.opencv.core.Point;
-import org.opencv.core.RotatedRect;
-import org.opencv.core.Scalar;
-import org.opencv.imgproc.Imgproc;
 
 /*
    JSON format:
@@ -79,7 +68,7 @@ import org.opencv.imgproc.Imgproc;
 public final class Main {
     private static String configFile = "/boot/frc.json";
 
-    private static final int CAMERA_RESOLUTION_X = 320, CAMERA_RESOLUTION_Y = 240, CAMERA_FPS = 30;
+    public static final int CAMERA_RESOLUTION_X = 320, CAMERA_RESOLUTION_Y = 240, CAMERA_FPS = 30;
     private static final int NUM_OF_CAMERAS = 2;
 
     // @SuppressWarnings("MemberName")
@@ -216,168 +205,7 @@ public final class Main {
         return camera;
     }
 
-    /**
-     * Get cargo lines using contour analysis.
-     * 
-     * @author Junqi Wu
-     */
-    public static class CargoPipeline implements VisionPipeline {
-
-        private static final int THRESHOLD = 160;
-        private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0),
-                RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255);
-        private static final int HORIZONTAL_FOV = 58;
-        private static final double TAPE_WIDTH = 2; // in inches
-        private static final double CAMERA_HEIGHT = 21; // in inches
-
-        public Mat dst;
-
-        public double angleToLine;
-        public double distanceToLine;
-        public double angleToWall;
-
-        @Override
-        public void process(Mat src) {
-            if (src.empty()) {
-                return;
-            }
-
-            dst = new Mat();
-
-            // Extract whites
-            Core.inRange(src, new Scalar(THRESHOLD, THRESHOLD, THRESHOLD), new Scalar(255, 255, 255), dst);
-
-            // Find all external contours
-            ArrayList<MatOfPoint> contours = new ArrayList<>();
-            try {
-                Imgproc.findContours(dst, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
-            } catch (CvException e) {
-                // Sometimes the Mat format gets messed up when switching cameras
-                System.out.println(e.getMessage());
-            }
-
-            dst = src;
-
-            MatOfPoint realLine = null;
-            RotatedRect realLineRect = null;
-            double closest = 1;
-
-            // Approximate contours with polygons
-            for (MatOfPoint contour : contours) {
-                // Only include contours larger than 1/200 of the screen
-                if (Imgproc.contourArea(contour) > dst.width() * dst.height() / 200) {
-                    // Convert format
-                    MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
-
-                    // Epsilon will be 2% of the perimeter, a lower epsilon will result in more
-                    // vertices
-                    double epsilon = 0.02 * Imgproc.arcLength(contour2f, true);
-
-                    // Approximate contour to polygon
-                    Imgproc.approxPolyDP(contour2f, contour2f, epsilon, true);
-
-                    // Convert format back
-                    contour = new MatOfPoint(contour2f.toArray());
-
-                    // Do the checks if it has 4 vertices and is convex
-                    if (contour.rows() == 4 && Imgproc.isContourConvex(contour)) {
-                        Imgproc.drawContours(dst, Arrays.asList(contour), -1, YELLOW, 1);
-
-                        // Get the bounding rect
-                        RotatedRect rect = Imgproc.minAreaRect(contour2f);
-                        double h = rect.size.height;
-                        double w = rect.size.width;
-                        double ratio = Math.max(h, w) / Math.min(h, w);
-
-                        // distance to center of the screen as a percentage
-                        double distanceToCenter = Math.abs(rect.center.x / CAMERA_RESOLUTION_X - 0.5);
-
-                        // The "real" line will be the rectangle greater than a certain length to width
-                        // ratio that is closest to the center of the screen
-                        if (ratio > 2 && distanceToCenter < closest) {
-                            realLine = contour;
-                            realLineRect = rect;
-                            closest = distanceToCenter;
-                        }
-                    } else {
-                        // Draw the contour
-                        Imgproc.drawContours(dst, Arrays.asList(contour), -1, ORANGE, 1);
-                    }
-                } else {
-                    // Draw the contour
-                    Imgproc.drawContours(dst, Arrays.asList(contour), -1, RED, 1);
-                }
-            }
-
-            if (realLine != null) {
-                // Draw the contour
-                Imgproc.drawContours(dst, Arrays.asList(realLine), -1, GREEN, 2);
-
-                // Get the best fit line
-                Mat fit = new Mat();
-                Imgproc.fitLine(realLine, fit, Imgproc.DIST_L2, 0, 0.01, 0.01);
-                double vx = fit.get(0, 0)[0];
-                double vy = fit.get(1, 0)[0];
-                // Change the vector so that it is facing upwards
-                if (vy > 0) {
-                    vx *= -1;
-                    vy *= -1;
-                }
-
-                // Get the rotation of the line which is the angle to the wall
-                double angle = Math.atan(-vy / vx);
-                if (angle < 0) {
-                    angle += Math.PI;
-                }
-                angleToWall = -(angle * 180 / Math.PI - 90);
-
-                // Get the bottom two vertices
-                double[] lowest = { 0, 0 };
-                double[] second = { 0, 0 };
-                for (int i = 0; i < realLine.rows(); i++) {
-                    double[] p = realLine.get(i, 0);
-                    if (p[1] > lowest[1]) {
-                        second = lowest;
-                        lowest = p;
-                    } else if (p[1] > second[1]) {
-                        second = p;
-                    }
-                }
-
-                double x = (lowest[0] + second[0]) / 2;
-                double y = (lowest[1] + second[1]) / 2;
-
-                angleToLine = (x / CAMERA_RESOLUTION_X - 0.5) * HORIZONTAL_FOV;
-
-                // Get the distance with the contour
-                double deltaX = lowest[0] - second[0];
-                double deltaY = lowest[1] - second[1];
-                double width = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-                double angularWidth = width / dst.width() * HORIZONTAL_FOV;
-                distanceToLine = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
-                distanceToLine = Math.sqrt(distanceToLine * distanceToLine - CAMERA_HEIGHT * CAMERA_HEIGHT);
-
-                // Get the distance with the rect
-                // double width = Math.min(realLineRect.size.height, realLineRect.size.width);
-                // double angularWidth = width / dst.width() * HORIZONTAL_FOV;
-                // distanceToLine = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
-                // distanceToLine = Math.sqrt(distanceToLine * distanceToLine - CAMERA_HEIGHT *
-                // CAMERA_HEIGHT);
-
-                // Draw the best fit line
-                Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
-
-                // Draw the bounding rect
-                Point[] vertices = new Point[4];
-                realLineRect.points(vertices);
-                for (int i = 0; i < vertices.length; i++) {
-                    Imgproc.line(dst, vertices[i], vertices[(i + 1) % 4], YELLOW, 1);
-                }
-            }
-
-        }
-
-    }
+    private static VisionThread visionThread;
 
     /**
      * Main.
@@ -411,17 +239,15 @@ public final class Main {
             cameras.add(startCamera(cameraConfig));
         }
 
-        // start image processing on camera 0 if present
+        // Start image processing if the correct number of camera streams are open
         if (cameras.size() == NUM_OF_CAMERAS) {
-            CvSource outputStream = CameraServer.getInstance().putVideo("Vision Pipline Output", CAMERA_RESOLUTION_X,
+            CvSource outputStream = CameraServer.getInstance().putVideo("Pi Output", CAMERA_RESOLUTION_X,
                     CAMERA_RESOLUTION_Y);
 
-            VideoSource videoSource = cameras.get(0);
-            CargoPipeline visionPipeline = new CargoPipeline();
-            Listener<CargoPipeline> callback = pipeline -> {
+            NetworkTable table = NetworkTableInstance.getDefault().getTable("vision");
 
-                NetworkTable table = NetworkTableInstance.getDefault().getTable("vision");
-
+            LinePipeline linePipeline = new LinePipeline();
+            Listener<LinePipeline> lineCallback = pipeline -> {
                 table.getEntry("angleToLine").setDouble(pipeline.angleToLine);
                 table.getEntry("distanceToLine").setDouble(pipeline.distanceToLine);
                 table.getEntry("angleToWall").setDouble(pipeline.angleToWall);
@@ -429,38 +255,55 @@ public final class Main {
                 outputStream.putFrame(pipeline.dst);
             };
 
-            VisionThread visionThread = new VisionThread(videoSource, visionPipeline, callback);
-            visionThread.start();
+            EmptyPipeline emptyPipeline = new EmptyPipeline();
+            Listener<EmptyPipeline> emptyCallback = pipeline -> {
+                outputStream.putFrame(pipeline.dst);
+            };
 
-            NetworkTable table = NetworkTableInstance.getDefault().getTable("vision");
+            table.getEntry("camera").addListener(event -> {
+                int camera = (int) event.value.getDouble();
 
-            // loop forever
-            while (true) {
-                // System.out.println("Switching cameras in 5 seconds");
-
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException ex) {
-                    return;
+                if (visionThread != null) {
+                    visionThread.interrupt();
                 }
 
-                System.out.println("\n\n\n\n\n\n\n\n\n");
-                System.out.println("Angle To Line: " + table.getEntry("angleToLine").getDouble(0));
-                System.out.println("Distance To Line: " + table.getEntry("distanceToLine").getDouble(0));
-                System.out.println("Angle To Wall: " + table.getEntry("angleToWall").getDouble(0));
+                System.out.println("Switching to camera " + camera + "...");
 
-                // if (videoSource == cameras.get(0)) {
-                // // videoSource = cameras.get(1);
-                // } else {
-                // videoSource = cameras.get(0);
-                // }
+                switch (camera) {
+                case 0:
+                    visionThread = new VisionThread(cameras.get(camera), linePipeline, lineCallback);
+                    break;
+                case 1:
+                    visionThread = new VisionThread(cameras.get(camera), emptyPipeline, emptyCallback);
+                    break;
+                }
 
-                // visionThread.interrupt();
-                // visionThread = new VisionThread(videoSource, visionPipeline, callback);
-                // visionThread.start();
+                visionThread.start();
+            }, EntryListenerFlags.kNew | EntryListenerFlags.kUpdate | EntryListenerFlags.kImmediate
+                    | EntryListenerFlags.kLocal);
+
+            // double num = 0;
+            // loop forever
+            while (true) {
+                try {
+                    System.out.println("Angle To Line: " + table.getEntry("angleToLine").getDouble(0));
+                    System.out.println("Distance To Line: " + table.getEntry("distanceToLine").getDouble(0));
+                    System.out.println("Angle To Wall: " + table.getEntry("angleToWall").getDouble(0));
+
+                    // table.getEntry("camera").setDouble(num);
+                    // if (num == 0) {
+                    //     num = 1;
+                    // } else {
+                    //     num = 0;
+                    // }
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
+                    System.out.println("Main thread sleep interrupted, are you switching cameras?");
+                }
             }
         } else {
-            System.out.println("ERROR: ONLY " + cameras.size() + " CAMERA(S) ARE CONNECTED");
+            System.out.println(
+                    "ERROR: " + NUM_OF_CAMERAS + " expected, but " + cameras.size() + " camera(s) were detected!");
         }
     }
 }
