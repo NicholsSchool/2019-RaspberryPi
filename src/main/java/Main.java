@@ -230,9 +230,6 @@ public final class Main {
             ntinst.startClientTeam(team);
         }
 
-        System.out.print(
-                "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nH E L L O ! ! !\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
-
         // start cameras
         List<VideoSource> cameras = new ArrayList<>();
         for (CameraConfig cameraConfig : cameraConfigs) {
@@ -241,7 +238,7 @@ public final class Main {
 
         // Start image processing if the correct number of camera streams are open
         if (cameras.size() == NUM_OF_CAMERAS) {
-            CvSource outputStream = CameraServer.getInstance().putVideo("Pi Output", CAMERA_RESOLUTION_X,
+            CvSource cvStream = CameraServer.getInstance().putVideo("Pi Output", CAMERA_RESOLUTION_X,
                     CAMERA_RESOLUTION_Y);
 
             NetworkTable table = NetworkTableInstance.getDefault().getTable("vision");
@@ -252,12 +249,12 @@ public final class Main {
                 table.getEntry("distanceToLine").setDouble(pipeline.distanceToLine);
                 table.getEntry("angleToWall").setDouble(pipeline.angleToWall);
 
-                outputStream.putFrame(pipeline.dst);
+                cvStream.putFrame(pipeline.dst);
             };
 
             EmptyPipeline emptyPipeline = new EmptyPipeline();
             Listener<EmptyPipeline> emptyCallback = pipeline -> {
-                outputStream.putFrame(pipeline.dst);
+                cvStream.putFrame(pipeline.dst);
             };
 
             table.getEntry("camera").addListener(event -> {

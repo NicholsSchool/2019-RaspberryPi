@@ -26,7 +26,6 @@ public class LinePipeline implements VisionPipeline {
     private static final double CAMERA_HEIGHT = 21 / 12d; // in feet
 
     private static final double CAMERA_OFFSET = 12 / 12d; // camera distance from the middle of the robot in feet
-    private static final double CAMERA_ANGLE_OFFSET_RATIO = 0.8; // the angle offset as a result from the camera offset
 
     public Mat dst;
 
@@ -99,7 +98,7 @@ public class LinePipeline implements VisionPipeline {
                     double ratio = Math.max(h, w) / Math.min(h, w);
 
                     // distance to center of the screen as a percentage
-                    double distanceToCenter = Math.abs(rect.center.x / Main.CAMERA_RESOLUTION_X - 0.5);
+                    double distanceToCenter = Math.abs(rect.center.x / dst.width() - 0.5);
 
                     // The "real" line will be the rectangle greater than a certain length to width
                     // ratio that is closest to the center of the screen
@@ -166,7 +165,7 @@ public class LinePipeline implements VisionPipeline {
 
         // The angle to the lline is the distance from the screen center multiplied by
         // the camera FOV
-        angleToLine = (x / Main.CAMERA_RESOLUTION_X - 0.5) * HORIZONTAL_FOV;
+        angleToLine = (x / dst.width() - 0.5) * HORIZONTAL_FOV;
 
         // Get the distance using the distance between the bottom vertices as the line
         // width
@@ -201,8 +200,10 @@ public class LinePipeline implements VisionPipeline {
         // the common side shared by the triangles formed by the observed angle to line
         // and the actual angle to line
         double commonSide = distanceToLine * Math.sin(angleToLine * Math.PI / 180);
-        
-        distanceToLine = Math.sqrt(distanceToLine * distanceToLine - CAMERA_OFFSET * CAMERA_OFFSET);
+
+        // get the actual distance to line using law of cosines
+        distanceToLine = Math.sqrt(distanceToLine * distanceToLine + CAMERA_OFFSET * CAMERA_OFFSET
+                - 2 * distanceToLine * CAMERA_OFFSET * Math.cos(angleToLine));
 
         angleToLine = Math.asin(commonSide / distanceToLine) * 180 / Math.PI;
     }
