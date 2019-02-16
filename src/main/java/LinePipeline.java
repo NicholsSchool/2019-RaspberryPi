@@ -23,9 +23,9 @@ public class LinePipeline implements VisionPipeline {
             RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255);
     private static final int HORIZONTAL_FOV = 57;
     private static final double TAPE_WIDTH = 2 / 12d; // in feet
-    private static final double CAMERA_HEIGHT = 21 / 12d; // in feet
+    private static final double CAMERA_HEIGHT = 13 / 12d; // in feet
 
-    private static final double CAMERA_OFFSET = 12 / 12d; // camera distance from the middle of the robot in feet
+    private static final double CAMERA_OFFSET = 10 / 12d; // camera distance from the middle of the robot in feet
 
     public Mat dst;
 
@@ -199,13 +199,13 @@ public class LinePipeline implements VisionPipeline {
     private void correctHeading() {
         // the common side shared by the triangles formed by the observed angle to line
         // and the actual angle to line
-        double commonSide = distanceToLine * Math.sin(angleToLine * Math.PI / 180);
+        double commonSide = distanceToLine * Math.sin(Math.abs(angleToLine) * Math.PI / 180);
 
         // get the actual distance to line using law of cosines
         distanceToLine = Math.sqrt(distanceToLine * distanceToLine + CAMERA_OFFSET * CAMERA_OFFSET
-                - 2 * distanceToLine * CAMERA_OFFSET * Math.cos(angleToLine));
+                - 2 * distanceToLine * CAMERA_OFFSET * Math.cos(Math.abs(angleToLine)));
 
-        angleToLine = Math.asin(commonSide / distanceToLine) * 180 / Math.PI;
+        angleToLine = Math.copySign(Math.asin(commonSide / distanceToLine) * 180 / Math.PI, angleToLine);
     }
 
 }
