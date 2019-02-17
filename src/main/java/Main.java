@@ -252,10 +252,13 @@ public final class Main {
                 cvStream.putFrame(pipeline.dst);
             };
 
-            EmptyPipeline emptyPipeline = new EmptyPipeline();
-            Listener<EmptyPipeline> emptyCallback = pipeline -> {
-                cvStream.putFrame(pipeline.dst);
-            };
+            // EmptyPipeline emptyPipeline = new EmptyPipeline();
+            // Listener<EmptyPipeline> emptyCallback = pipeline -> {
+            //     cvStream.putFrame(pipeline.dst);
+            // };
+
+            visionThread = new VisionThread(cameras.get(0), linePipeline, lineCallback);
+            visionThread.start();
 
             table.getEntry("camera").addListener(event -> {
                 int camera = (int) event.value.getDouble();
@@ -271,7 +274,7 @@ public final class Main {
                     visionThread = new VisionThread(cameras.get(camera), linePipeline, lineCallback);
                     break;
                 case 1:
-                    visionThread = new VisionThread(cameras.get(camera), emptyPipeline, emptyCallback);
+                    visionThread = new VisionThread(cameras.get(camera), linePipeline, lineCallback);
                     break;
                 }
 

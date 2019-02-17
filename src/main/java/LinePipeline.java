@@ -23,9 +23,10 @@ public class LinePipeline implements VisionPipeline {
             RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255);
     private static final int HORIZONTAL_FOV = 57;
     private static final double TAPE_WIDTH = 2 / 12d; // in feet
-    private static final double CAMERA_HEIGHT = 13 / 12d; // in feet
+    private static final double CAMERA_HEIGHT = 46.5 / 12d; // in feet
 
-    private static final double CAMERA_OFFSET = 10 / 12d; // camera distance from the middle of the robot in feet
+    private static final double CAMERA_HORIZONTAL_OFFSET = 12 / 12d; // camera distance from the middle of the robot
+    private static final double CAMERA_DEPTH = 0 / 12d; // camera depth from the middle of the robot (?)
 
     public Mat dst;
 
@@ -72,8 +73,8 @@ public class LinePipeline implements VisionPipeline {
 
         // Approximate contours with polygons
         for (MatOfPoint contour : contours) {
-            // Only include contours larger than 1/200 of the screen
-            if (Imgproc.contourArea(contour) > dst.width() * dst.height() / 200) {
+            // Only include contours larger than 1/300 of the screen
+            if (Imgproc.contourArea(contour) > dst.width() * dst.height() / 300) {
                 // Convert format
                 MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
 
@@ -194,18 +195,23 @@ public class LinePipeline implements VisionPipeline {
         // }
 
         correctHeading();
+        distanceToLine -= CAMERA_DEPTH;
     }
 
     private void correctHeading() {
+        // alpha the the observed angle to the line from horizontal
+        double alpha = 90 - Math.abs(angleToLine);
         // the common side shared by the triangles formed by the observed angle to line
         // and the actual angle to line
-        double commonSide = distanceToLine * Math.sin(Math.abs(angleToLine) * Math.PI / 180);
+        double commonSide = distanceToLine * Math.sin(alpha * Math.PI / 180);
 
         // get the actual distance to line using law of cosines
-        distanceToLine = Math.sqrt(distanceToLine * distanceToLine + CAMERA_OFFSET * CAMERA_OFFSET
-                - 2 * distanceToLine * CAMERA_OFFSET * Math.cos(Math.abs(angleToLine)));
+        distanceToLine = Math.sqrt(distanceToLine * distanceToLine + CAMERA_HORIZONTAL_OFFSET * CAMERA_HORIZONTAL_OFFSET
+                - 2 * distanceToLine * CAMERA_HORIZONTAL_OFFSET * Math.cos(alpha));
 
-        angleToLine = Math.copySign(Math.asin(commonSide / distanceToLine) * 180 / Math.PI, angleToLine);
+        // beta is the actual angle to line from horizontal
+        double beta = Math.asin(commonSide / distanceToLine) * 180 / Math.PI;
+        angleToLine = Math.copySign(90 - beta, angleToLine);
     }
 
 }
