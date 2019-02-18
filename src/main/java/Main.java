@@ -243,11 +243,11 @@ public final class Main {
 
             NetworkTable table = NetworkTableInstance.getDefault().getTable("vision");
 
-            LinePipeline linePipeline = new LinePipeline();
-            Listener<LinePipeline> lineCallback = pipeline -> {
-                table.getEntry("angleToLine").setDouble(pipeline.angleToLine);
-                table.getEntry("distanceToLine").setDouble(pipeline.distanceToLine);
-                table.getEntry("angleToWall").setDouble(pipeline.angleToWall);
+            LinePipeline2 linePipeline = new LinePipeline2();
+            Listener<LinePipeline2> lineCallback = pipeline -> {
+                // table.getEntry("angleToLine").setDouble(pipeline.angleToLine);
+                // table.getEntry("distanceToLine").setDouble(pipeline.distanceToLine);
+                // table.getEntry("angleToWall").setDouble(pipeline.angleToWall);
 
                 cvStream.putFrame(pipeline.dst);
             };

@@ -6,7 +6,6 @@ import org.opencv.core.CvException;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
-import org.opencv.core.Point;
 import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
@@ -20,7 +19,6 @@ public class LinePipeline implements VisionPipeline {
 
     private static final int THRESHOLD = 160;
     private static final Scalar
-        BLUE = new Scalar(255, 0, 0),
         GREEN = new Scalar(0, 255, 0),
         RED = new Scalar(0, 0, 255),
         YELLOW = new Scalar(0, 255, 255),
@@ -166,7 +164,7 @@ public class LinePipeline implements VisionPipeline {
 
         // Get the midpoint of the bottom two vertices
         double x = (lowest[0] + second[0]) / 2;
-        double y = (lowest[1] + second[1]) / 2;
+        // double y = (lowest[1] + second[1]) / 2;
 
         // The angle to the lline is the distance from the screen center multiplied by
         // the camera FOV
@@ -205,8 +203,8 @@ public class LinePipeline implements VisionPipeline {
             angleToWall = 0;
         }
 
-        // correctHorizontalOffset();
-        // correctDepthOffset();
+        correctHorizontalOffset();
+        correctDepthOffset();
     }
 
     private void correctHorizontalOffset() {
