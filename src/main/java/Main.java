@@ -257,7 +257,7 @@ public final class Main {
             //     cvStream.putFrame(pipeline.dst);
             // };
 
-            visionThread = new VisionThread(cameras.get(0), linePipeline, lineCallback);
+            visionThread = new VisionThread(cameras.get(1), linePipeline, lineCallback);
             visionThread.start();
 
             table.getEntry("camera").addListener(event -> {

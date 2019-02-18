@@ -19,14 +19,18 @@ import edu.wpi.first.vision.VisionPipeline;
 public class LinePipeline implements VisionPipeline {
 
     private static final int THRESHOLD = 160;
-    private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0),
-            RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255);
+    private static final Scalar
+        BLUE = new Scalar(255, 0, 0),
+        GREEN = new Scalar(0, 255, 0),
+        RED = new Scalar(0, 0, 255),
+        YELLOW = new Scalar(0, 255, 255),
+        ORANGE = new Scalar(0, 165, 255);
     private static final int HORIZONTAL_FOV = 57;
     private static final double TAPE_WIDTH = 2 / 12d; // in feet
-    private static final double CAMERA_HEIGHT = 46.5 / 12d; // in feet
+    private static final double CAMERA_HEIGHT = 33.5 / 12d; // in feet
 
-    private static final double CAMERA_HORIZONTAL_OFFSET = 12 / 12d; // camera distance from the middle of the robot
-    private static final double CAMERA_DEPTH = 0 / 12d; // camera depth from the middle of the robot (?)
+    private static final double CAMERA_HORIZONTAL_OFFSET = 11 / 12d; // camera distance from the middle of the robot
+    private static final double CAMERA_DEPTH_OFFSET = 13 / 12d; // camera depth from the middle of the robot (?)
 
     public Mat dst;
 
@@ -174,7 +178,7 @@ public class LinePipeline implements VisionPipeline {
         double deltaY = lowest[1] - second[1];
         double width = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
         double angularWidth = width / dst.width() * HORIZONTAL_FOV;
-        distanceToLine = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
+        distanceToLine = TAPE_WIDTH / 2 / Math.tan(angularWidth * Math.PI / 180 / 2);
         distanceToLine = Math.sqrt(distanceToLine * distanceToLine - CAMERA_HEIGHT * CAMERA_HEIGHT);
 
         // Get the distance using the width of the bounding rect as the line width
@@ -185,7 +189,7 @@ public class LinePipeline implements VisionPipeline {
         // CAMERA_HEIGHT);
 
         // Draw the best fit line
-        Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
+        // Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
 
         // Draw the bounding rect
         // Point[] vertices = new Point[4];
@@ -194,24 +198,42 @@ public class LinePipeline implements VisionPipeline {
         // Imgproc.line(dst, vertices[i], vertices[(i + 1) % 4], YELLOW, 1);
         // }
 
-        correctHeading();
-        distanceToLine -= CAMERA_DEPTH;
+        // Heading corrections placed on camera offset from center of rotation
+        if(Double.isNaN(distanceToLine)) {
+            angleToLine = 0;
+            distanceToLine = 0;
+            angleToWall = 0;
+        }
+
+        // correctHorizontalOffset();
+        // correctDepthOffset();
     }
 
-    private void correctHeading() {
-        // alpha the the observed angle to the line from horizontal
-        double alpha = 90 - Math.abs(angleToLine);
-        // the common side shared by the triangles formed by the observed angle to line
+    private void correctHorizontalOffset() {
+        // Alpha is the the observed angle to the line from horizontal
+        double alpha = (90 - Math.abs(angleToLine)) * Math.PI / 180;
+        // The common side shared by the triangles formed by the observed angle to line
         // and the actual angle to line
-        double commonSide = distanceToLine * Math.sin(alpha * Math.PI / 180);
+        double commonSide = distanceToLine * Math.sin(alpha);
 
-        // get the actual distance to line using law of cosines
+        // Get the actual distance to line using law of cosines
         distanceToLine = Math.sqrt(distanceToLine * distanceToLine + CAMERA_HORIZONTAL_OFFSET * CAMERA_HORIZONTAL_OFFSET
                 - 2 * distanceToLine * CAMERA_HORIZONTAL_OFFSET * Math.cos(alpha));
 
-        // beta is the actual angle to line from horizontal
+        // Beta is the actual angle to line from horizontal
         double beta = Math.asin(commonSide / distanceToLine) * 180 / Math.PI;
         angleToLine = Math.copySign(90 - beta, angleToLine);
+    }
+
+    private void correctDepthOffset() {
+        double alpha = Math.abs(angleToLine) * Math.PI / 180;
+        double commonSide = distanceToLine * Math.sin(alpha);
+
+        distanceToLine = Math.sqrt(distanceToLine * distanceToLine + CAMERA_DEPTH_OFFSET * CAMERA_DEPTH_OFFSET
+                - 2 * distanceToLine * CAMERA_DEPTH_OFFSET * Math.cos(alpha));
+
+        double beta = Math.asin(commonSide / distanceToLine) * 180 / Math.PI;
+        angleToLine = Math.copySign(beta, angleToLine);
     }
 
 }
