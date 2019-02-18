@@ -245,9 +245,9 @@ public final class Main {
 
             LinePipeline2 linePipeline = new LinePipeline2();
             Listener<LinePipeline2> lineCallback = pipeline -> {
-                // table.getEntry("angleToLine").setDouble(pipeline.angleToLine);
-                // table.getEntry("distanceToLine").setDouble(pipeline.distanceToLine);
-                // table.getEntry("angleToWall").setDouble(pipeline.angleToWall);
+                table.getEntry("angleToLine").setDouble(pipeline.angleToLine);
+                table.getEntry("distanceToLine").setDouble(pipeline.distanceToLine);
+                table.getEntry("angleToWall").setDouble(pipeline.angleToWall);
 
                 cvStream.putFrame(pipeline.dst);
             };

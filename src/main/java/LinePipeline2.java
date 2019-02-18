@@ -29,9 +29,15 @@ public class LinePipeline2 implements VisionPipeline {
             RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255),
             MAGENTA = new Scalar(255, 0, 255);
 
-    private static final double FOCAL_LENGTH = 400; // in pixels, needs tuning if res is changed
+    private static final double FOCAL_LENGTH = 420; // in pixels, needs tuning if res is changed
+    private static final double CAMERA_ANGLE_OFFSET = -23 * Math.PI / 180;
+    private static final double CAMERA_X_OFFSET = 0; // in inches
+    private static final double CAMERA_Y_OFFSET = 0;
 
     public Mat dst;
+    public double angleToLine;
+    public double distanceToLine;
+    public double angleToWall;
 
     private Mat src;
     private ArrayList<MatOfPoint> contours;
@@ -39,6 +45,8 @@ public class LinePipeline2 implements VisionPipeline {
     private MatOfPoint2f line2f;
     private Mat rotationVector;
     private Mat translationVector;
+    private double deltaX;
+    private double deltaY;
 
     @Override
     public void process(Mat src) {
@@ -53,6 +61,9 @@ public class LinePipeline2 implements VisionPipeline {
         getVectors();
         System.out.println("Rotation Vector: " + vtos(rotationVector));
         System.out.println("Translation Vector: " + vtos(translationVector));
+
+        getWorldPos();
+        getHeading();
     }
 
     private void getLines() {
@@ -87,7 +98,7 @@ public class LinePipeline2 implements VisionPipeline {
 
                 // Epsilon will be 2% of the perimeter, a lower epsilon will result in more
                 // vertices
-                double epsilon = 0.01 * Imgproc.arcLength(contour2f, true);
+                double epsilon = 0.02 * Imgproc.arcLength(contour2f, true);
 
                 // Approximate contour to polygon
                 Imgproc.approxPolyDP(contour2f, contour2f, epsilon, true);
@@ -110,7 +121,7 @@ public class LinePipeline2 implements VisionPipeline {
 
                     // The "real" line will be the rectangle greater than a certain length to width
                     // ratio that is closest to the center of the screen
-                    if (ratio > 2 && distanceToCenter < closest) {
+                    if (ratio > 4 && distanceToCenter < closest) {
                         realLine = contour;
                         realLine2f = contour2f;
                         closest = distanceToCenter;
@@ -144,32 +155,80 @@ public class LinePipeline2 implements VisionPipeline {
         cameraIntrinsics.put(1, 2, principalOffsetY);
         cameraIntrinsics.put(2, 2, 1);
 
-        Point3[] realSpacePointsArr = new Point3[4];
+        Point3[] worldSpacePointsArr = new Point3[4];
         // (-1, 0, 0) will be the bottom left corner, points are in counterclockwise
         // order
-        realSpacePointsArr[0] = new Point3(-1, 0, 0);
-        realSpacePointsArr[1] = new Point3(1, 0, 0);
-        realSpacePointsArr[2] = new Point3(1, 18, 0);
-        realSpacePointsArr[3] = new Point3(-1, 18, 0);
-        MatOfPoint3f realSpacePoints = new MatOfPoint3f(realSpacePointsArr);
+        worldSpacePointsArr[0] = new Point3(-1, 0, 0);
+        worldSpacePointsArr[1] = new Point3(1, 0, 0);
+        worldSpacePointsArr[2] = new Point3(1, 18, 0);
+        worldSpacePointsArr[3] = new Point3(-1, 18, 0);
+        MatOfPoint3f realSpacePoints = new MatOfPoint3f(worldSpacePointsArr);
 
         rotationVector = new Mat();
         translationVector = new Mat();
         Calib3d.solvePnP(realSpacePoints, line2f, cameraIntrinsics, new MatOfDouble(), rotationVector,
                 translationVector);
 
-        Point3[] shiftedRealSpacePointsArr = new Point3[4];
-        // (0, 0, 0) will be the bottom left corner
-        shiftedRealSpacePointsArr[0] = new Point3(-1, 0, 2);
-        shiftedRealSpacePointsArr[1] = new Point3(1, 0, 2);
-        shiftedRealSpacePointsArr[2] = new Point3(1, 18, 2);
-        shiftedRealSpacePointsArr[3] = new Point3(-1, 18, 2);
-        MatOfPoint3f shiftedRealSpacePoints = new MatOfPoint3f(shiftedRealSpacePointsArr);
+        Point3[] shiftedWorldSpacePointsArr = new Point3[4];
+        shiftedWorldSpacePointsArr[0] = new Point3(-1, 0, 2);
+        shiftedWorldSpacePointsArr[1] = new Point3(1, 0, 2);
+        shiftedWorldSpacePointsArr[2] = new Point3(1, 18, 2);
+        shiftedWorldSpacePointsArr[3] = new Point3(-1, 18, 2);
+        MatOfPoint3f shiftedRealSpacePoints = new MatOfPoint3f(shiftedWorldSpacePointsArr);
         MatOfPoint2f shiftedImagePoints = new MatOfPoint2f();
         Calib3d.projectPoints(shiftedRealSpacePoints, rotationVector, translationVector, cameraIntrinsics,
                 new MatOfDouble(), shiftedImagePoints);
 
         drawBox(line2f, shiftedImagePoints);
+    }
+
+    // world pos relative to camera
+    private void getWorldPos() {
+        Mat rotationInv = new Mat();
+        Calib3d.Rodrigues(rotationVector, rotationInv);
+        Core.transpose(rotationInv, rotationInv);
+
+        Mat camWorldPos = new Mat();
+        Core.multiply(rotationInv, new Scalar(-1), rotationInv);
+        // use Core.gemm() instead of Core.multiply() for matrices of different
+        // dimensions
+        Core.gemm(rotationInv, translationVector, 1, new Mat(), 0, camWorldPos);
+
+        System.out.println("cam world X: " + camWorldPos.get(0, 0)[0]);
+        System.out.println("cam world Y: " + camWorldPos.get(1, 0)[0]);
+        System.out.println("cam world Z: " + camWorldPos.get(2, 0)[0]);
+
+        // account for camera offset, rotate about x axis
+        Mat angleOffset = Mat.zeros(3, 3, CvType.CV_64FC1);
+        angleOffset.put(0, 0, 1);
+        angleOffset.put(1, 1, Math.cos(CAMERA_ANGLE_OFFSET));
+        angleOffset.put(1, 2, -Math.sin(CAMERA_ANGLE_OFFSET));
+        angleOffset.put(2, 1, Math.sin(CAMERA_ANGLE_OFFSET));
+        angleOffset.put(2, 2, Math.cos(CAMERA_ANGLE_OFFSET));
+
+        Mat positionOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
+        positionOffset.put(0, 0, CAMERA_X_OFFSET);
+        positionOffset.put(1, 0, CAMERA_Y_OFFSET);
+
+        Mat worldPos = new Mat();
+        Core.gemm(angleOffset, camWorldPos, 1, new Mat(), 0, worldPos);
+        Core.add(worldPos, positionOffset, worldPos);
+
+        System.out.println("world X: " + worldPos.get(0, 0)[0]);
+        System.out.println("world Y: " + worldPos.get(1, 0)[0]);
+        System.out.println("world Z: " + worldPos.get(2, 0)[0]);
+        deltaX = worldPos.get(0, 0)[0];
+        deltaY = worldPos.get(2, 0)[0];
+    }
+
+    private void getHeading() {
+        angleToLine = Math.tan(deltaX / deltaY) * 180 / Math.PI;
+        distanceToLine = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        // angle to wall is the z rotation of the camera to the line
+        Mat rotationInv = new Mat();
+        Calib3d.Rodrigues(rotationVector, rotationInv);
+        Core.transpose(rotationInv, rotationInv);
+        angleToWall = rotationInv.get(2, 0)[0];
     }
 
     private String vtos(Mat v) {
