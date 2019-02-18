@@ -250,6 +250,10 @@ public final class Main {
                 table.getEntry("distanceToLine").setDouble(pipeline.distanceToLine);
                 table.getEntry("angleToWall").setDouble(pipeline.angleToWall);
 
+                SmartDashboard.putNumber("Angle To Line: ", pipeline.angleToLine);
+                SmartDashboard.putNumber("Distance To Line: ", pipeline.distanceToLine);
+                SmartDashboard.putNumber("Angle To Wall: ", pipeline.angleToWall);
+
                 SmartDashboard.putNumber("Line X: ", pipeline.lineX);
                 SmartDashboard.putNumber("Line Y: ", pipeline.lineY);
                 SmartDashboard.putNumber("Line Z: ", pipeline.lineZ);

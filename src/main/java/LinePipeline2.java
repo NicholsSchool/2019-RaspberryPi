@@ -30,9 +30,9 @@ public class LinePipeline2 implements VisionPipeline {
             MAGENTA = new Scalar(255, 0, 255);
 
     private static final double FOCAL_LENGTH = 300; // in pixels, needs tuning if res is changed
-    private static final double CAMERA_ANGLE_OFFSET = 40 * Math.PI / 180;
-    private static final double CAMERA_X_OFFSET = -10; // in inches
-    private static final double CAMERA_Y_OFFSET = 13;
+    private static final double CAMERA_ANGLE_OFFSET = 15 * Math.PI / 180;
+    private static final double CAMERA_X_OFFSET = 10; // in inches
+    private static final double CAMERA_Y_OFFSET = -13;
 
     public Mat dst;
     public double angleToLine;
@@ -104,7 +104,7 @@ public class LinePipeline2 implements VisionPipeline {
 
                 // Epsilon will be 2% of the perimeter, a lower epsilon will result in more
                 // vertices
-                double epsilon = 0.01 * Imgproc.arcLength(contour2f, true);
+                double epsilon = 0.015 * Imgproc.arcLength(contour2f, true);
 
                 // Approximate contour to polygon
                 Imgproc.approxPolyDP(contour2f, contour2f, epsilon, true);
@@ -222,11 +222,11 @@ public class LinePipeline2 implements VisionPipeline {
     }
 
     private void getHeading() {
-        angleToLine = Math.tan(lineX / lineY) * 180 / Math.PI;
-        distanceToLine = Math.sqrt(lineX * lineX + lineY * lineY);
+        angleToLine = Math.atan(lineX / lineY) * 180 / Math.PI;
+        distanceToLine = lineY; // Math.sqrt(lineX * lineX + lineY * lineY);
         distanceToLine /= 12;
         // angle to wall is the z rotation of the camera to the line
-        angleToWall = -rotationVector.get(2, 0)[0];
+        angleToWall = -rotationVector.get(2, 0)[0] * 180 / Math.PI;
     }
 
     private String vtos(Mat v) {
