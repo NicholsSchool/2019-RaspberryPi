@@ -29,6 +29,7 @@ import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.vision.VisionThread;
 import edu.wpi.first.vision.VisionRunner.Listener;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
 /*
    JSON format:
@@ -248,6 +249,10 @@ public final class Main {
                 table.getEntry("angleToLine").setDouble(pipeline.angleToLine);
                 table.getEntry("distanceToLine").setDouble(pipeline.distanceToLine);
                 table.getEntry("angleToWall").setDouble(pipeline.angleToWall);
+
+                SmartDashboard.putNumber("Line X: ", pipeline.lineX);
+                SmartDashboard.putNumber("Line Y: ", pipeline.lineY);
+                SmartDashboard.putNumber("Line Z: ", pipeline.lineZ);
 
                 cvStream.putFrame(pipeline.dst);
             };

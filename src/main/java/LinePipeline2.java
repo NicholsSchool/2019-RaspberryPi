@@ -29,10 +29,10 @@ public class LinePipeline2 implements VisionPipeline {
             RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255),
             MAGENTA = new Scalar(255, 0, 255);
 
-    private static final double FOCAL_LENGTH = 420; // in pixels, needs tuning if res is changed
-    private static final double CAMERA_ANGLE_OFFSET = -23 * Math.PI / 180;
-    private static final double CAMERA_X_OFFSET = 0; // in inches
-    private static final double CAMERA_Y_OFFSET = 0;
+    private static final double FOCAL_LENGTH = 300; // in pixels, needs tuning if res is changed
+    private static final double CAMERA_ANGLE_OFFSET = 40 * Math.PI / 180;
+    private static final double CAMERA_X_OFFSET = -10; // in inches
+    private static final double CAMERA_Y_OFFSET = 13;
 
     public Mat dst;
     public double angleToLine;
@@ -45,8 +45,10 @@ public class LinePipeline2 implements VisionPipeline {
     private MatOfPoint2f line2f;
     private Mat rotationVector;
     private Mat translationVector;
-    private double deltaX;
-    private double deltaY;
+
+    public double lineX;
+    public double lineY;
+    public double lineZ;
 
     @Override
     public void process(Mat src) {
@@ -57,6 +59,10 @@ public class LinePipeline2 implements VisionPipeline {
 
         getLines();
         getRealLine();
+
+        if (line == null) {
+            return;
+        }
 
         getVectors();
         System.out.println("Rotation Vector: " + vtos(rotationVector));
@@ -85,8 +91,8 @@ public class LinePipeline2 implements VisionPipeline {
     }
 
     private void getRealLine() {
-        MatOfPoint realLine = null;
-        MatOfPoint2f realLine2f = null;
+        line = null;
+        line2f = null;
         double closest = 1;
 
         // Approximate contours with polygons
@@ -98,7 +104,7 @@ public class LinePipeline2 implements VisionPipeline {
 
                 // Epsilon will be 2% of the perimeter, a lower epsilon will result in more
                 // vertices
-                double epsilon = 0.02 * Imgproc.arcLength(contour2f, true);
+                double epsilon = 0.01 * Imgproc.arcLength(contour2f, true);
 
                 // Approximate contour to polygon
                 Imgproc.approxPolyDP(contour2f, contour2f, epsilon, true);
@@ -121,9 +127,9 @@ public class LinePipeline2 implements VisionPipeline {
 
                     // The "real" line will be the rectangle greater than a certain length to width
                     // ratio that is closest to the center of the screen
-                    if (ratio > 4 && distanceToCenter < closest) {
-                        realLine = contour;
-                        realLine2f = contour2f;
+                    if (ratio > 2 && distanceToCenter < closest) {
+                        line = contour;
+                        line2f = contour2f;
                         closest = distanceToCenter;
                     }
                 } else {
@@ -136,14 +142,11 @@ public class LinePipeline2 implements VisionPipeline {
             }
         }
 
-        line = reorderPoints(realLine);
-        line2f = reorderPoints(realLine2f);
     }
 
     private void getVectors() {
-        if (line == null) {
-            return;
-        }
+        line = reorderPoints(line);
+        line2f = reorderPoints(line2f);
 
         // all intrinsics are in pixel values
         final double principalOffsetX = dst.width() / 2;
@@ -188,15 +191,14 @@ public class LinePipeline2 implements VisionPipeline {
         Calib3d.Rodrigues(rotationVector, rotationInv);
         Core.transpose(rotationInv, rotationInv);
 
-        Mat camWorldPos = new Mat();
+        // line position relative to the camera
+        Mat lineRelativePos = new Mat();
         Core.multiply(rotationInv, new Scalar(-1), rotationInv);
         // use Core.gemm() instead of Core.multiply() for matrices of different
         // dimensions
-        Core.gemm(rotationInv, translationVector, 1, new Mat(), 0, camWorldPos);
+        Core.gemm(rotationInv, translationVector, 1, new Mat(), 0, lineRelativePos);
 
-        System.out.println("cam world X: " + camWorldPos.get(0, 0)[0]);
-        System.out.println("cam world Y: " + camWorldPos.get(1, 0)[0]);
-        System.out.println("cam world Z: " + camWorldPos.get(2, 0)[0]);
+        Core.multiply(lineRelativePos, new Scalar(-1), lineRelativePos);
 
         // account for camera offset, rotate about x axis
         Mat angleOffset = Mat.zeros(3, 3, CvType.CV_64FC1);
@@ -210,25 +212,21 @@ public class LinePipeline2 implements VisionPipeline {
         positionOffset.put(0, 0, CAMERA_X_OFFSET);
         positionOffset.put(1, 0, CAMERA_Y_OFFSET);
 
-        Mat worldPos = new Mat();
-        Core.gemm(angleOffset, camWorldPos, 1, new Mat(), 0, worldPos);
-        Core.add(worldPos, positionOffset, worldPos);
+        Mat lineWorldPos = new Mat();
+        Core.gemm(angleOffset, lineRelativePos, 1, new Mat(), 0, lineWorldPos);
+        Core.add(lineWorldPos, positionOffset, lineWorldPos);
 
-        System.out.println("world X: " + worldPos.get(0, 0)[0]);
-        System.out.println("world Y: " + worldPos.get(1, 0)[0]);
-        System.out.println("world Z: " + worldPos.get(2, 0)[0]);
-        deltaX = worldPos.get(0, 0)[0];
-        deltaY = worldPos.get(2, 0)[0];
+        lineX = lineWorldPos.get(0, 0)[0];
+        lineY = lineWorldPos.get(1, 0)[0];
+        lineZ = lineWorldPos.get(2, 0)[0];
     }
 
     private void getHeading() {
-        angleToLine = Math.tan(deltaX / deltaY) * 180 / Math.PI;
-        distanceToLine = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        angleToLine = Math.tan(lineX / lineY) * 180 / Math.PI;
+        distanceToLine = Math.sqrt(lineX * lineX + lineY * lineY);
+        distanceToLine /= 12;
         // angle to wall is the z rotation of the camera to the line
-        Mat rotationInv = new Mat();
-        Calib3d.Rodrigues(rotationVector, rotationInv);
-        Core.transpose(rotationInv, rotationInv);
-        angleToWall = rotationInv.get(2, 0)[0];
+        angleToWall = -rotationVector.get(2, 0)[0];
     }
 
     private String vtos(Mat v) {
