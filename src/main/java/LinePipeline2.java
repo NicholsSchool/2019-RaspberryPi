@@ -31,6 +31,7 @@ public class LinePipeline2 implements VisionPipeline {
 
     private static final double FOCAL_LENGTH = 400; // In pixels, needs tuning if res is changed
 
+    public double tapeLength;
     public double cameraAngleOffset;
     public double cameraXOffset;
     public double cameraYOffset;
@@ -221,8 +222,8 @@ public class LinePipeline2 implements VisionPipeline {
         Point3[] botWorldSpaceArr = new Point3[4];
         botWorldSpaceArr[0] = new Point3(-1, 0, 0);
         botWorldSpaceArr[1] = new Point3(1, 0, 0);
-        botWorldSpaceArr[2] = new Point3(1, 0, 18);
-        botWorldSpaceArr[3] = new Point3(-1, 0, 18);
+        botWorldSpaceArr[2] = new Point3(1, 0, tapeLength);
+        botWorldSpaceArr[3] = new Point3(-1, 0, tapeLength);
         MatOfPoint3f botWorldSpacePts = new MatOfPoint3f(botWorldSpaceArr);
 
         Mat botRotationVector = new Mat();
@@ -234,8 +235,8 @@ public class LinePipeline2 implements VisionPipeline {
         Point3[] shiftedBotWorldSpaceArr = new Point3[4];
         shiftedBotWorldSpaceArr[0] = new Point3(-1, -2, 0);
         shiftedBotWorldSpaceArr[1] = new Point3(1, -2, 0);
-        shiftedBotWorldSpaceArr[2] = new Point3(1, -2, 18);
-        shiftedBotWorldSpaceArr[3] = new Point3(-1, -2, 18);
+        shiftedBotWorldSpaceArr[2] = new Point3(1, -2, tapeLength);
+        shiftedBotWorldSpaceArr[3] = new Point3(-1, -2, tapeLength);
         MatOfPoint3f shiftedBotWorldSpacePts = new MatOfPoint3f(shiftedBotWorldSpaceArr);
         MatOfPoint2f shiftedImgPts = new MatOfPoint2f();
         Calib3d.projectPoints(shiftedBotWorldSpacePts, botRotationVector, botTranslationVector, camIntrinsics,
@@ -245,8 +246,8 @@ public class LinePipeline2 implements VisionPipeline {
 
         // Top of the line as (0, 0, 0)
         Point3[] topWorldSpaceArr = new Point3[4];
-        topWorldSpaceArr[0] = new Point3(-1, 0, -18);
-        topWorldSpaceArr[1] = new Point3(1, 0, -18);
+        topWorldSpaceArr[0] = new Point3(-1, 0, -tapeLength);
+        topWorldSpaceArr[1] = new Point3(1, 0, -tapeLength);
         topWorldSpaceArr[2] = new Point3(1, 0, 0);
         topWorldSpaceArr[3] = new Point3(-1, 0, 0);
         MatOfPoint3f topWorldSpacePts = new MatOfPoint3f(topWorldSpaceArr);

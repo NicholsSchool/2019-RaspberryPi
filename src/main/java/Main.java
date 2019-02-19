@@ -245,6 +245,7 @@ public final class Main {
             NetworkTable table = NetworkTableInstance.getDefault().getTable("vision");
 
             LinePipeline2 linePipeline = new LinePipeline2();
+            linePipeline.tapeLength = 18;
             linePipeline.cameraAngleOffset = 10 * Math.PI / 180;
             linePipeline.cameraXOffset = -12;
             linePipeline.cameraYOffset = -12;
