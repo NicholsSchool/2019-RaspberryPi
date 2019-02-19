@@ -29,11 +29,12 @@ public class LinePipeline2 implements VisionPipeline {
             RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255),
             MAGENTA = new Scalar(255, 0, 255);
 
-    private static final double FOCAL_LENGTH = 180; // In pixels, needs tuning if res is changed
-    private static final double CAMERA_ANGLE_OFFSET = 5 * Math.PI / 180;
-    private static final double CAMERA_X_OFFSET = 12; // In inches
-    private static final double CAMERA_Y_OFFSET = -10;
-    private static final double CAMERA_Z_OFFSET = -10;
+    private static final double FOCAL_LENGTH = 400; // In pixels, needs tuning if res is changed
+
+    public double cameraAngleOffset;
+    public double cameraXOffset;
+    public double cameraYOffset;
+    public double cameraZOffset;
 
     public Mat dst;
     public double angleToLine;
@@ -58,7 +59,7 @@ public class LinePipeline2 implements VisionPipeline {
             return;
         }
 
-        Mat[] vecs = getTranslationVectors(line);
+        Mat[] vecs = getTranslation(line);
 
         Mat[] pos = camPosToRobotPos(vecs);
         setHeading(pos);
@@ -139,6 +140,7 @@ public class LinePipeline2 implements VisionPipeline {
 
     }
 
+    /*
     @Deprecated
     private Mat[] getVectors(MatOfPoint2f line) {
         line = reorderPoints(line);
@@ -197,8 +199,9 @@ public class LinePipeline2 implements VisionPipeline {
 
         return new Mat[] { botRotationVector, botTranslationVector, topRotationVector, topTranslationVector };
     }
+    */
 
-    private Mat[] getTranslationVectors(MatOfPoint2f line) {
+    private Mat[] getTranslation(MatOfPoint2f line) {
         line = reorderPoints(line);
 
         // All camera intrinsics are in pixel values
@@ -256,28 +259,30 @@ public class LinePipeline2 implements VisionPipeline {
         return new Mat[] { botTranslationVector, topTranslationVector };
     }
 
+    /*
     // Coordinates of the line relative to camera
     @Deprecated
     private Mat[] getRelativePos(Mat[] vecs) {
         Mat camOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
-        camOffset.put(0, 0, CAMERA_X_OFFSET);
-        camOffset.put(1, 0, CAMERA_Y_OFFSET);
-        camOffset.put(2, 0, CAMERA_Z_OFFSET);
+        camOffset.put(0, 0, cameraXOffset);
+        camOffset.put(1, 0, cameraYOffset);
+        camOffset.put(2, 0, cameraZOffset);
 
-        Mat lineBottomPos = vectorsToPos(vecs[0], vecs[1], CAMERA_ANGLE_OFFSET, camOffset);
-        Mat lineTopPos = vectorsToPos(vecs[2], vecs[3], CAMERA_ANGLE_OFFSET, camOffset);
+        Mat lineBottomPos = vectorsToPos(vecs[0], vecs[1], cameraAngleOffset, camOffset);
+        Mat lineTopPos = vectorsToPos(vecs[2], vecs[3], cameraAngleOffset, camOffset);
 
         return new Mat[] { lineBottomPos, lineTopPos };
     }
+    */
 
-    private Mat[] camPosToRobotPos(Mat[] vecs) {
+    private Mat[] camPosToRobotPos(Mat[] pos) {
         Mat camOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
-        camOffset.put(0, 0, CAMERA_X_OFFSET);
-        camOffset.put(1, 0, CAMERA_Y_OFFSET);
-        camOffset.put(2, 0, CAMERA_Z_OFFSET);
+        camOffset.put(0, 0, cameraXOffset);
+        camOffset.put(1, 0, cameraYOffset);
+        camOffset.put(2, 0, cameraZOffset);
 
-        Mat lineBottomPos = camPosToRobotPos(vecs[0], CAMERA_ANGLE_OFFSET, camOffset);
-        Mat lineTopPos = camPosToRobotPos(vecs[1], CAMERA_ANGLE_OFFSET, camOffset);
+        Mat lineBottomPos = camPosToRobotPos(pos[0], cameraAngleOffset, camOffset);
+        Mat lineTopPos = camPosToRobotPos(pos[1], cameraAngleOffset, camOffset);
 
         return new Mat[] { lineBottomPos, lineTopPos };
     }
@@ -309,6 +314,7 @@ public class LinePipeline2 implements VisionPipeline {
 
     }
 
+    /*
     // Convert rotation and translation vectors to relative x, y, z position
     @Deprecated
     private Mat vectorsToPos(Mat rvec, Mat tvec, double camRot, Mat camOffset) {
@@ -340,6 +346,7 @@ public class LinePipeline2 implements VisionPipeline {
 
         return lineWorldPos;
     }
+    */
 
     private Mat camPosToRobotPos(Mat pos, double camRot, Mat camOffset) {
         // Account for camera rotation, reverse rotate about x axis with left-hand rule
