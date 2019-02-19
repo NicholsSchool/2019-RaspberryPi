@@ -278,6 +278,8 @@ public class LinePipeline2 implements VisionPipeline {
 
     private Mat[] camPosToRobotPos(Mat[] pos) {
         Mat camOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
+        // 3D axes is same as 2D image axes, right is positive x, down is positive y,
+        // foward is positive z (a clockwise axes system)
         camOffset.put(0, 0, cameraXOffset);
         camOffset.put(1, 0, cameraYOffset);
         camOffset.put(2, 0, cameraZOffset);
@@ -350,7 +352,7 @@ public class LinePipeline2 implements VisionPipeline {
     */
 
     private Mat camPosToRobotPos(Mat pos, double camRot, Mat camOffset) {
-        // Account for camera rotation, reverse rotate about x axis with left-hand rule
+        // Account for camera rotation, rotate counter-clockwise about x axis with left-hand rule
         Mat camRotMat = Mat.zeros(3, 3, CvType.CV_64FC1);
         camRotMat.put(0, 0, 1);
         camRotMat.put(1, 1, Math.cos(camRot));

@@ -292,6 +292,10 @@ public final class Main {
                     visionThread = new VisionThread(cameras.get(camera), linePipeline, lineCallback);
                     break;
                 case 1:
+                    linePipeline.cameraAngleOffset = 10 * Math.PI / 180;
+                    linePipeline.cameraXOffset = 10;
+                    linePipeline.cameraYOffset = -43;
+                    linePipeline.cameraZOffset = -13;
                     visionThread = new VisionThread(cameras.get(camera), linePipeline, lineCallback);
                     break;
                 }
