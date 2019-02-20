@@ -29,7 +29,8 @@ public class LinePipeline2 implements VisionPipeline {
             RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255),
             MAGENTA = new Scalar(255, 0, 255);
 
-    private static final double FOCAL_LENGTH = 400; // In pixels, needs tuning if res is changed
+    private static final double FOCAL_LENGTH = 330; // In pixels, needs tuning if res is changed
+    private static final int TAPE_DISTANCE_BUFFER = 20; // Distance padding from tip of tape
 
     public double tapeLength;
     public double cameraAngleOffset;
@@ -220,10 +221,10 @@ public class LinePipeline2 implements VisionPipeline {
         // Points start with bottom left corner and run counter-clockwise
         // Bottom of the line as (0, 0, 0)
         Point3[] botWorldSpaceArr = new Point3[4];
-        botWorldSpaceArr[0] = new Point3(-1, 0, 0);
-        botWorldSpaceArr[1] = new Point3(1, 0, 0);
-        botWorldSpaceArr[2] = new Point3(1, 0, tapeLength);
-        botWorldSpaceArr[3] = new Point3(-1, 0, tapeLength);
+        botWorldSpaceArr[0] = new Point3(-1, 0, 0 + TAPE_DISTANCE_BUFFER);
+        botWorldSpaceArr[1] = new Point3(1, 0, 0 + TAPE_DISTANCE_BUFFER);
+        botWorldSpaceArr[2] = new Point3(1, 0, tapeLength + TAPE_DISTANCE_BUFFER);
+        botWorldSpaceArr[3] = new Point3(-1, 0, tapeLength + TAPE_DISTANCE_BUFFER);
         MatOfPoint3f botWorldSpacePts = new MatOfPoint3f(botWorldSpaceArr);
 
         Mat botRotationVector = new Mat();
@@ -233,10 +234,10 @@ public class LinePipeline2 implements VisionPipeline {
 
         // Shift the points up 2 inches to draw the 3D box
         Point3[] shiftedBotWorldSpaceArr = new Point3[4];
-        shiftedBotWorldSpaceArr[0] = new Point3(-1, -2, 0);
-        shiftedBotWorldSpaceArr[1] = new Point3(1, -2, 0);
-        shiftedBotWorldSpaceArr[2] = new Point3(1, -2, tapeLength);
-        shiftedBotWorldSpaceArr[3] = new Point3(-1, -2, tapeLength);
+        shiftedBotWorldSpaceArr[0] = new Point3(-1, -2, 0 + TAPE_DISTANCE_BUFFER);
+        shiftedBotWorldSpaceArr[1] = new Point3(1, -2, 0 + TAPE_DISTANCE_BUFFER);
+        shiftedBotWorldSpaceArr[2] = new Point3(1, -2, tapeLength + TAPE_DISTANCE_BUFFER);
+        shiftedBotWorldSpaceArr[3] = new Point3(-1, -2, tapeLength + TAPE_DISTANCE_BUFFER);
         MatOfPoint3f shiftedBotWorldSpacePts = new MatOfPoint3f(shiftedBotWorldSpaceArr);
         MatOfPoint2f shiftedImgPts = new MatOfPoint2f();
         Calib3d.projectPoints(shiftedBotWorldSpacePts, botRotationVector, botTranslationVector, camIntrinsics,
@@ -246,10 +247,10 @@ public class LinePipeline2 implements VisionPipeline {
 
         // Top of the line as (0, 0, 0)
         Point3[] topWorldSpaceArr = new Point3[4];
-        topWorldSpaceArr[0] = new Point3(-1, 0, -tapeLength);
-        topWorldSpaceArr[1] = new Point3(1, 0, -tapeLength);
-        topWorldSpaceArr[2] = new Point3(1, 0, 0);
-        topWorldSpaceArr[3] = new Point3(-1, 0, 0);
+        topWorldSpaceArr[0] = new Point3(-1, 0, -tapeLength + TAPE_DISTANCE_BUFFER);
+        topWorldSpaceArr[1] = new Point3(1, 0, -tapeLength + TAPE_DISTANCE_BUFFER);
+        topWorldSpaceArr[2] = new Point3(1, 0, 0 + TAPE_DISTANCE_BUFFER);
+        topWorldSpaceArr[3] = new Point3(-1, 0, 0 + TAPE_DISTANCE_BUFFER);
         MatOfPoint3f topWorldSpacePts = new MatOfPoint3f(topWorldSpaceArr);
 
         Mat topRotationVector = new Mat();
