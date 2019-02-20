@@ -142,66 +142,6 @@ public class LinePipeline2 implements VisionPipeline {
 
     }
 
-    /*
-    @Deprecated
-    private Mat[] getVectors(MatOfPoint2f line) {
-        line = reorderPoints(line);
-
-        // All camera intrinsics are in pixel values
-        final double principalOffsetX = dst.width() / 2;
-        final double principalOffsetY = dst.height() / 2;
-        Mat camIntrinsics = Mat.zeros(3, 3, CvType.CV_64FC1);
-        camIntrinsics.put(0, 0, FOCAL_LENGTH);
-        camIntrinsics.put(0, 2, principalOffsetX);
-        camIntrinsics.put(1, 1, FOCAL_LENGTH);
-        camIntrinsics.put(1, 2, principalOffsetY);
-        camIntrinsics.put(2, 2, 1);
-
-        // 3D axes is same as 2D image axes, right is positive x, down is positive y,
-        // foward is positive z (a clockwise axes system)
-        // Points start with bottom left corner and run counter-clockwise
-        // Bottom of the line as (0, 0, 0)
-        Point3[] botWorldSpaceArr = new Point3[4];
-        botWorldSpaceArr[0] = new Point3(-1, 0, 0);
-        botWorldSpaceArr[1] = new Point3(1, 0, 0);
-        botWorldSpaceArr[2] = new Point3(1, 0, 18);
-        botWorldSpaceArr[3] = new Point3(-1, 0, 18);
-        MatOfPoint3f botWorldSpacePts = new MatOfPoint3f(botWorldSpaceArr);
-
-        Mat botRotationVector = new Mat();
-        Mat botTranslationVector = new Mat();
-        Calib3d.solvePnP(botWorldSpacePts, line, camIntrinsics, new MatOfDouble(), botRotationVector,
-                botTranslationVector);
-
-        // Shift the points up 2 inches to draw the 3D box
-        Point3[] shiftedBotWorldSpaceArr = new Point3[4];
-        shiftedBotWorldSpaceArr[0] = new Point3(-1, -2, 0);
-        shiftedBotWorldSpaceArr[1] = new Point3(1, -2, 0);
-        shiftedBotWorldSpaceArr[2] = new Point3(1, -2, 18);
-        shiftedBotWorldSpaceArr[3] = new Point3(-1, -2, 18);
-        MatOfPoint3f shiftedBotWorldSpacePts = new MatOfPoint3f(shiftedBotWorldSpaceArr);
-        MatOfPoint2f shiftedImgPts = new MatOfPoint2f();
-        Calib3d.projectPoints(shiftedBotWorldSpacePts, botRotationVector, botTranslationVector, camIntrinsics,
-                new MatOfDouble(), shiftedImgPts);
-
-        drawBox(line, shiftedImgPts);
-
-        // Top of the line as (0, 0, 0)
-        Point3[] topWorldSpaceArr = new Point3[4];
-        topWorldSpaceArr[0] = new Point3(-1, 0, -18);
-        topWorldSpaceArr[1] = new Point3(1, 0, -18);
-        topWorldSpaceArr[2] = new Point3(1, 0, 0);
-        topWorldSpaceArr[3] = new Point3(-1, 0, 0);
-        MatOfPoint3f topWorldSpacePts = new MatOfPoint3f(topWorldSpaceArr);
-
-        Mat topRotationVector = new Mat();
-        Mat topTranslationVector = new Mat();
-        Calib3d.solvePnP(topWorldSpacePts, line, camIntrinsics, new MatOfDouble(), topRotationVector,
-                topTranslationVector);
-
-        return new Mat[] { botRotationVector, botTranslationVector, topRotationVector, topTranslationVector };
-    }
-    */
 
     private Mat[] getTranslation(MatOfPoint2f line) {
         line = reorderPoints(line);
@@ -234,10 +174,10 @@ public class LinePipeline2 implements VisionPipeline {
 
         // Shift the points up 2 inches to draw the 3D box
         Point3[] shiftedBotWorldSpaceArr = new Point3[4];
-        shiftedBotWorldSpaceArr[0] = new Point3(-1, -2, 0 + TAPE_DISTANCE_BUFFER);
-        shiftedBotWorldSpaceArr[1] = new Point3(1, -2, 0 + TAPE_DISTANCE_BUFFER);
-        shiftedBotWorldSpaceArr[2] = new Point3(1, -2, tapeLength + TAPE_DISTANCE_BUFFER);
-        shiftedBotWorldSpaceArr[3] = new Point3(-1, -2, tapeLength + TAPE_DISTANCE_BUFFER);
+        shiftedBotWorldSpaceArr[0] = new Point3(-1, -2, 0);
+        shiftedBotWorldSpaceArr[1] = new Point3(1, -2, 0);
+        shiftedBotWorldSpaceArr[2] = new Point3(1, -2, tapeLength);
+        shiftedBotWorldSpaceArr[3] = new Point3(-1, -2, tapeLength);
         MatOfPoint3f shiftedBotWorldSpacePts = new MatOfPoint3f(shiftedBotWorldSpaceArr);
         MatOfPoint2f shiftedImgPts = new MatOfPoint2f();
         Calib3d.projectPoints(shiftedBotWorldSpacePts, botRotationVector, botTranslationVector, camIntrinsics,
@@ -247,10 +187,10 @@ public class LinePipeline2 implements VisionPipeline {
 
         // Top of the line as (0, 0, 0)
         Point3[] topWorldSpaceArr = new Point3[4];
-        topWorldSpaceArr[0] = new Point3(-1, 0, -tapeLength + TAPE_DISTANCE_BUFFER);
-        topWorldSpaceArr[1] = new Point3(1, 0, -tapeLength + TAPE_DISTANCE_BUFFER);
-        topWorldSpaceArr[2] = new Point3(1, 0, 0 + TAPE_DISTANCE_BUFFER);
-        topWorldSpaceArr[3] = new Point3(-1, 0, 0 + TAPE_DISTANCE_BUFFER);
+        topWorldSpaceArr[0] = new Point3(-1, 0, -tapeLength);
+        topWorldSpaceArr[1] = new Point3(1, 0, -tapeLength);
+        topWorldSpaceArr[2] = new Point3(1, 0, 0);
+        topWorldSpaceArr[3] = new Point3(-1, 0, 0);
         MatOfPoint3f topWorldSpacePts = new MatOfPoint3f(topWorldSpaceArr);
 
         Mat topRotationVector = new Mat();
@@ -261,34 +201,35 @@ public class LinePipeline2 implements VisionPipeline {
         return new Mat[] { botTranslationVector, topTranslationVector };
     }
 
-    /*
-    // Coordinates of the line relative to camera
-    @Deprecated
-    private Mat[] getRelativePos(Mat[] vecs) {
-        Mat camOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
-        camOffset.put(0, 0, cameraXOffset);
-        camOffset.put(1, 0, cameraYOffset);
-        camOffset.put(2, 0, cameraZOffset);
-
-        Mat lineBottomPos = vectorsToPos(vecs[0], vecs[1], cameraAngleOffset, camOffset);
-        Mat lineTopPos = vectorsToPos(vecs[2], vecs[3], cameraAngleOffset, camOffset);
-
-        return new Mat[] { lineBottomPos, lineTopPos };
-    }
-    */
-
     private Mat[] camPosToRobotPos(Mat[] pos) {
         Mat camOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
         // 3D axes is same as 2D image axes, right is positive x, down is positive y,
         // foward is positive z (a clockwise axes system)
         camOffset.put(0, 0, cameraXOffset);
         camOffset.put(1, 0, cameraYOffset);
-        camOffset.put(2, 0, cameraZOffset);
+        camOffset.put(2, 0, cameraZOffset - TAPE_DISTANCE_BUFFER);
 
         Mat lineBottomPos = camPosToRobotPos(pos[0], cameraAngleOffset, camOffset);
         Mat lineTopPos = camPosToRobotPos(pos[1], cameraAngleOffset, camOffset);
 
         return new Mat[] { lineBottomPos, lineTopPos };
+    }
+
+    private Mat camPosToRobotPos(Mat pos, double camRot, Mat camOffset) {
+        // Account for camera rotation, rotate counter-clockwise about x axis with left-hand rule
+        Mat camRotMat = Mat.zeros(3, 3, CvType.CV_64FC1);
+        camRotMat.put(0, 0, 1);
+        camRotMat.put(1, 1, Math.cos(camRot));
+        camRotMat.put(1, 2, Math.sin(camRot));
+        camRotMat.put(2, 1, -Math.sin(camRot));
+        camRotMat.put(2, 2, Math.cos(camRot));
+
+        // Line position relative to center of robot
+        Mat lineWorldPos = new Mat();
+        Core.gemm(camRotMat, pos, 1, new Mat(), 0, lineWorldPos);
+        Core.add(lineWorldPos, camOffset, lineWorldPos);
+
+        return lineWorldPos;
     }
 
     private void setHeading(Mat[] pos) {
@@ -318,56 +259,6 @@ public class LinePipeline2 implements VisionPipeline {
 
     }
 
-    /*
-    // Convert rotation and translation vectors to relative x, y, z position
-    @Deprecated
-    private Mat vectorsToPos(Mat rvec, Mat tvec, double camRot, Mat camOffset) {
-        Mat rmat = new Mat();
-        // Convert 3x1 rotation vector to 3x3 rotation matrix
-        Calib3d.Rodrigues(rvec, rmat);
-        // Transpose = inverse for rotation matrices
-        Core.transpose(rmat, rmat);
-
-        // Get line position relative to the camera by reversing transformation
-        Mat lineRelativePos = new Mat();
-        Core.multiply(rmat, new Scalar(-1), rmat);
-        // Use gemm() instead of multiply() for matrices of different dimensions
-        Core.gemm(rmat, tvec, 1, new Mat(), 0, lineRelativePos);
-        Core.multiply(lineRelativePos, new Scalar(-1), lineRelativePos);
-
-        // Account for camera rotation, reverse rotate about x axis with left-hand rule
-        Mat camRotMat = Mat.zeros(3, 3, CvType.CV_64FC1);
-        camRotMat.put(0, 0, 1);
-        camRotMat.put(1, 1, Math.cos(camRot));
-        camRotMat.put(1, 2, Math.sin(camRot));
-        camRotMat.put(2, 1, -Math.sin(camRot));
-        camRotMat.put(2, 2, Math.cos(camRot));
-
-        // Line position relative to center of robot
-        Mat lineWorldPos = new Mat();
-        Core.gemm(camRotMat, lineRelativePos, 1, new Mat(), 0, lineWorldPos);
-        Core.add(lineWorldPos, camOffset, lineWorldPos);
-
-        return lineWorldPos;
-    }
-    */
-
-    private Mat camPosToRobotPos(Mat pos, double camRot, Mat camOffset) {
-        // Account for camera rotation, rotate counter-clockwise about x axis with left-hand rule
-        Mat camRotMat = Mat.zeros(3, 3, CvType.CV_64FC1);
-        camRotMat.put(0, 0, 1);
-        camRotMat.put(1, 1, Math.cos(camRot));
-        camRotMat.put(1, 2, Math.sin(camRot));
-        camRotMat.put(2, 1, -Math.sin(camRot));
-        camRotMat.put(2, 2, Math.cos(camRot));
-
-        // Line position relative to center of robot
-        Mat lineWorldPos = new Mat();
-        Core.gemm(camRotMat, pos, 1, new Mat(), 0, lineWorldPos);
-        Core.add(lineWorldPos, camOffset, lineWorldPos);
-
-        return lineWorldPos;
-    }
 
     private MatOfPoint2f reorderPoints(MatOfPoint2f m) {
         Point[] points = m.toArray();
