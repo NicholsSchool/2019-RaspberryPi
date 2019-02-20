@@ -161,10 +161,10 @@ public class LinePipeline2 implements VisionPipeline {
         // Points start with bottom left corner and run counter-clockwise
         // Bottom of the line as (0, 0, 0)
         Point3[] botWorldSpaceArr = new Point3[4];
-        botWorldSpaceArr[0] = new Point3(-1, 0, 0 + TAPE_DISTANCE_BUFFER);
-        botWorldSpaceArr[1] = new Point3(1, 0, 0 + TAPE_DISTANCE_BUFFER);
-        botWorldSpaceArr[2] = new Point3(1, 0, tapeLength + TAPE_DISTANCE_BUFFER);
-        botWorldSpaceArr[3] = new Point3(-1, 0, tapeLength + TAPE_DISTANCE_BUFFER);
+        botWorldSpaceArr[0] = new Point3(-1, 0, 0);
+        botWorldSpaceArr[1] = new Point3(1, 0, 0);
+        botWorldSpaceArr[2] = new Point3(1, 0, tapeLength);
+        botWorldSpaceArr[3] = new Point3(-1, 0, tapeLength);
         MatOfPoint3f botWorldSpacePts = new MatOfPoint3f(botWorldSpaceArr);
 
         Mat botRotationVector = new Mat();
