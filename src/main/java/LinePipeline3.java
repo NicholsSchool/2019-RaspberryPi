@@ -31,8 +31,8 @@ public class LinePipeline3 implements VisionPipeline {
 
     private static final int THRESHOLD = 160;
 
-    private static final double FOCAL_LENGTH = 310; // In pixels, needs tuning if res is changed
-    private static final int TAPE_DISTANCE_BUFFER = 6; // Distance padding from tip of tape
+    private static final double FOCAL_LENGTH = 300; // In pixels, needs tuning if res is changed
+    private static final int TAPE_DISTANCE_BUFFER = 12; // Distance padding from tip of tape
 
     private Mat dst;
 
@@ -104,9 +104,9 @@ public class LinePipeline3 implements VisionPipeline {
                 // Convert format
                 MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
 
-                // Epsilon will be 1.25% of the perimeter, a lower epsilon will result in more
+                // Epsilon will be 1.5% of the perimeter, a lower epsilon will result in more
                 // vertices
-                double epsilon = 0.0125 * Imgproc.arcLength(contour2f, true);
+                double epsilon = 0.015 * Imgproc.arcLength(contour2f, true);
 
                 // Approximate contour to polygon
                 Imgproc.approxPolyDP(contour2f, contour2f, epsilon, true);
@@ -187,9 +187,9 @@ public class LinePipeline3 implements VisionPipeline {
 
     private void offsetAdjustment() {
 
-        double camRotation = rvec.get(0, 0)[0];
         // Account for camera rotation, rotate counter-clockwise about x axis with
         // left-hand rule
+        double camRotation = rvec.get(0, 0)[0];
         Mat rotationMat = Mat.zeros(3, 3, CvType.CV_64FC1);
         rotationMat.put(0, 0, 1);
         rotationMat.put(1, 1, Math.cos(camRotation));
@@ -197,6 +197,12 @@ public class LinePipeline3 implements VisionPipeline {
         rotationMat.put(2, 1, -Math.sin(camRotation));
         rotationMat.put(2, 2, Math.cos(camRotation));
         Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
+
+        // Reverse the rotation and multiply by the translation to get the position of the line
+    	// Mat rmat = new Mat();
+    	// Calib3d.Rodrigues(rvec, rmat);
+    	// Core.transpose(rmat, rmat);
+    	// Core.gemm(rmat, tvec, 1, new Mat(), 0, tvec);
 
         Core.add(tvec, camOffset, tvec);
 
@@ -210,6 +216,7 @@ public class LinePipeline3 implements VisionPipeline {
         angleToLine = Math.atan(x / z) * 180 / Math.PI;
         distanceToLine = Math.sqrt(x * x + z * z);
         distanceToLine /= 12;
+        // Angle to wall is the Y rotation of the line
         angleToWall = rvec.get(1, 0)[0];
     }
 
@@ -267,11 +274,13 @@ public class LinePipeline3 implements VisionPipeline {
 
     public String getRotationVector() {
         String s = "<";
-        for (int i = 0; i < rvec.rows(); i++) {
-            if (i != 0) {
-                s += ", ";
+        if (rvec != null) {
+            for (int i = 0; i < rvec.rows(); i++) {
+                if (i != 0) {
+                    s += ", ";
+                }
+                s += rvec.get(i, 0)[0];
             }
-            s += rvec.get(i, 0)[0];
         }
         s += ">";
 
@@ -280,11 +289,13 @@ public class LinePipeline3 implements VisionPipeline {
 
     public String getTranslationVector() {
         String s = "<";
-        for (int i = 0; i < rvec.rows(); i++) {
-            if (i != 0) {
-                s += ", ";
+        if (tvec != null) {
+            for (int i = 0; i < tvec.rows(); i++) {
+                if (i != 0) {
+                    s += ", ";
+                }
+                s += tvec.get(i, 0)[0];
             }
-            s += tvec.get(i, 0)[0];
         }
         s += ">";
 
