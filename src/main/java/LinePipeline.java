@@ -14,13 +14,14 @@ import org.opencv.core.Point;
 import org.opencv.core.Point3;
 import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
 import edu.wpi.first.vision.VisionPipeline;
 
 /**
  * LinePipline gets the heading of alignment lines using contour analysis and
- * the direct vectors from 3D-2D point correspondence.
+ * 3D-2D point correspondence.
  */
 public class LinePipeline implements VisionPipeline {
 
@@ -62,6 +63,8 @@ public class LinePipeline implements VisionPipeline {
         if (src.empty()) {
             return;
         }
+
+        sharpen(src);
 
         getLine(src);
 
@@ -218,6 +221,13 @@ public class LinePipeline implements VisionPipeline {
         distanceToLine /= 12;
         // Angle to wall is the Y rotation of the line
         angleToWall = rvec.get(1, 0)[0];
+    }
+
+    private void sharpen(Mat src) {
+        // Sharpen original image by subtracting a weighted blurred version
+        Mat blurred = new Mat();
+        Imgproc.GaussianBlur(src, blurred, new Size(0, 0), 3);
+		Core.addWeighted(src, 1.5, blurred, -0.5, 0, src);
     }
 
     private void drawBox(MatOfPoint2f imagePoints, MatOfPoint2f shiftedImagePoints) {

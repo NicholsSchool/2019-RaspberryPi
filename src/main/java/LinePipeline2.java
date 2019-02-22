@@ -20,7 +20,7 @@ import edu.wpi.first.vision.VisionPipeline;
 
 /**
  * LinePipline gets the heading of alignment lines using contour analysis and
- * 3D-2D point correspondence.
+ * 3D-2D point correspondence of the bottom and the top of the line.
  */
 public class LinePipeline2 implements VisionPipeline {
 
