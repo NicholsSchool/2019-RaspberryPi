@@ -190,8 +190,8 @@ public class LinePipeline implements VisionPipeline {
 
     private void offsetAdjustment() {
 
-        // Account for camera rotation, rotate counter-clockwise about x axis with
-        // left-hand rule
+        // Account for camera rotation in respect to the ground, rotate counter-clockwise
+        // about x axis with left-hand rule
         double camRotation = rvec.get(0, 0)[0];
         Mat rotationMat = Mat.zeros(3, 3, CvType.CV_64FC1);
         rotationMat.put(0, 0, 1);
@@ -200,12 +200,6 @@ public class LinePipeline implements VisionPipeline {
         rotationMat.put(2, 1, -Math.sin(camRotation));
         rotationMat.put(2, 2, Math.cos(camRotation));
         Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
-
-        // Reverse the rotation and multiply by the translation to get the position of the line
-    	// Mat rmat = new Mat();
-    	// Calib3d.Rodrigues(rvec, rmat);
-    	// Core.transpose(rmat, rmat);
-    	// Core.gemm(rmat, tvec, 1, new Mat(), 0, tvec);
 
         Core.add(tvec, camOffset, tvec);
 
@@ -219,7 +213,7 @@ public class LinePipeline implements VisionPipeline {
         angleToLine = Math.atan(x / z) * 180 / Math.PI;
         distanceToLine = Math.sqrt(x * x + z * z);
         distanceToLine /= 12;
-        // Angle to wall is the Y rotation of the line
+        // Angle to wall is the Y rotation of the camera to the line
         angleToWall = rvec.get(1, 0)[0];
     }
 
@@ -227,7 +221,7 @@ public class LinePipeline implements VisionPipeline {
         // Sharpen original image by subtracting a weighted blurred version
         Mat blurred = new Mat();
         Imgproc.GaussianBlur(src, blurred, new Size(0, 0), 3);
-		Core.addWeighted(src, 1.5, blurred, -0.5, 0, src);
+        Core.addWeighted(src, 1.5, blurred, -0.5, 0, src);
     }
 
     private void drawBox(MatOfPoint2f imagePoints, MatOfPoint2f shiftedImagePoints) {
