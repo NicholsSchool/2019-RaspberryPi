@@ -24,28 +24,51 @@ import edu.wpi.first.vision.VisionPipeline;
  */
 public class LinePipeline2 implements VisionPipeline {
 
-    private static final int THRESHOLD = 160;
+    @SuppressWarnings("unused")
     private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0),
             RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255),
             MAGENTA = new Scalar(255, 0, 255);
 
+    private static final int THRESHOLD = 160;
+
     private static final double FOCAL_LENGTH = 330; // In pixels, needs tuning if res is changed
     private static final int TAPE_DISTANCE_BUFFER = 20; // Distance padding from tip of tape
 
-    public double tapeLength;
-    public double cameraAngleOffset;
-    public double cameraXOffset;
-    public double cameraYOffset;
-    public double cameraZOffset;
+    private Mat dst;
 
-    public Mat dst;
-    public double angleToLine;
-    public double distanceToLine;
-    public double angleToWall;
+    private double tapeLength;
+    private Mat rotationMat;
+    private Mat camOffset;
 
-    public double lineX;
-    public double lineY;
-    public double lineZ;
+    private MatOfPoint2f line;
+
+    private Mat topRvec;
+    private Mat topTvec;
+    private Mat bottomRvec;
+    private Mat bottomTvec;
+
+    private double angleToLine;
+    private double distanceToLine;
+    private double angleToWall;
+
+    public LinePipeline2(double tapeLength, double rotationOffset, double xOffset, double yOffset, double zOffset) {
+        this.tapeLength = tapeLength;
+
+        // Account for camera rotation, rotate counter-clockwise about x axis with
+        // left-hand rule
+        rotationMat = Mat.zeros(3, 3, CvType.CV_64FC1);
+        rotationOffset *= Math.PI / 180;
+        rotationMat.put(0, 0, 1);
+        rotationMat.put(1, 1, Math.cos(rotationOffset));
+        rotationMat.put(1, 2, Math.sin(rotationOffset));
+        rotationMat.put(2, 1, -Math.sin(rotationOffset));
+        rotationMat.put(2, 2, Math.cos(rotationOffset));
+
+        camOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
+        camOffset.put(0, 0, xOffset);
+        camOffset.put(1, 0, yOffset);
+        camOffset.put(2, 0, zOffset - TAPE_DISTANCE_BUFFER);
+    }
 
     @Override
     public void process(Mat src) {
@@ -53,22 +76,21 @@ public class LinePipeline2 implements VisionPipeline {
             return;
         }
 
-        ArrayList<MatOfPoint> contours = getContours(src);
-
-        MatOfPoint2f line = getLine(contours);
+        getLine(src);
 
         if (line == null) {
             return;
         }
 
-        Mat[] vecs = getTranslation(line);
+        getTranslation();
 
-        Mat[] pos = camPosToRobotPos(vecs);
-        setHeading(pos);
+        offsetAdjustment();
+
+        setHeading();
     }
 
     // Get the contours of bright objects
-    private ArrayList<MatOfPoint> getContours(Mat src) {
+    private void getLine(Mat src) {
         dst = new Mat();
 
         // Extract whites
@@ -85,11 +107,7 @@ public class LinePipeline2 implements VisionPipeline {
 
         dst = src;
 
-        return contours;
-    }
-
-    private MatOfPoint2f getLine(ArrayList<MatOfPoint> contours) {
-        MatOfPoint2f line = null;
+        line = null;
         double closest = 1;
 
         // Approximate contours with polygons
@@ -137,13 +155,9 @@ public class LinePipeline2 implements VisionPipeline {
                 // Imgproc.drawContours(dst, Arrays.asList(contour), -1, RED, 1);
             }
         }
-
-        return line;
-
     }
 
-
-    private Mat[] getTranslation(MatOfPoint2f line) {
+    private void getTranslation() {
         line = reorderPoints(line);
 
         // All camera intrinsics are in pixel values
@@ -167,10 +181,9 @@ public class LinePipeline2 implements VisionPipeline {
         botWorldSpaceArr[3] = new Point3(-1, 0, tapeLength);
         MatOfPoint3f botWorldSpacePts = new MatOfPoint3f(botWorldSpaceArr);
 
-        Mat botRotationVector = new Mat();
-        Mat botTranslationVector = new Mat();
-        Calib3d.solvePnP(botWorldSpacePts, line, camIntrinsics, new MatOfDouble(), botRotationVector,
-                botTranslationVector);
+        bottomRvec = new Mat();
+        bottomTvec = new Mat();
+        Calib3d.solvePnP(botWorldSpacePts, line, camIntrinsics, new MatOfDouble(), bottomRvec, bottomTvec);
 
         // Shift the points up 2 inches to draw the 3D box
         Point3[] shiftedBotWorldSpaceArr = new Point3[4];
@@ -180,8 +193,8 @@ public class LinePipeline2 implements VisionPipeline {
         shiftedBotWorldSpaceArr[3] = new Point3(-1, -2, tapeLength);
         MatOfPoint3f shiftedBotWorldSpacePts = new MatOfPoint3f(shiftedBotWorldSpaceArr);
         MatOfPoint2f shiftedImgPts = new MatOfPoint2f();
-        Calib3d.projectPoints(shiftedBotWorldSpacePts, botRotationVector, botTranslationVector, camIntrinsics,
-                new MatOfDouble(), shiftedImgPts);
+        Calib3d.projectPoints(shiftedBotWorldSpacePts, bottomRvec, bottomTvec, camIntrinsics, new MatOfDouble(),
+                shiftedImgPts);
 
         drawBox(line, shiftedImgPts);
 
@@ -193,59 +206,34 @@ public class LinePipeline2 implements VisionPipeline {
         topWorldSpaceArr[3] = new Point3(-1, 0, 0);
         MatOfPoint3f topWorldSpacePts = new MatOfPoint3f(topWorldSpaceArr);
 
-        Mat topRotationVector = new Mat();
-        Mat topTranslationVector = new Mat();
-        Calib3d.solvePnP(topWorldSpacePts, line, camIntrinsics, new MatOfDouble(), topRotationVector,
-                topTranslationVector);
-
-        return new Mat[] { botTranslationVector, topTranslationVector };
+        topRvec = new Mat();
+        topTvec = new Mat();
+        Calib3d.solvePnP(topWorldSpacePts, line, camIntrinsics, new MatOfDouble(), topRvec, topTvec);
     }
 
-    private Mat[] camPosToRobotPos(Mat[] pos) {
-        Mat camOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
-        // 3D axes is same as 2D image axes, right is positive x, down is positive y,
-        // foward is positive z (a clockwise axes system)
-        camOffset.put(0, 0, cameraXOffset);
-        camOffset.put(1, 0, cameraYOffset);
-        camOffset.put(2, 0, cameraZOffset - TAPE_DISTANCE_BUFFER);
-
-        Mat lineBottomPos = camPosToRobotPos(pos[0], cameraAngleOffset, camOffset);
-        Mat lineTopPos = camPosToRobotPos(pos[1], cameraAngleOffset, camOffset);
-
-        return new Mat[] { lineBottomPos, lineTopPos };
-    }
-
-    private Mat camPosToRobotPos(Mat pos, double camRot, Mat camOffset) {
-        // Account for camera rotation, rotate counter-clockwise about x axis with left-hand rule
-        Mat camRotMat = Mat.zeros(3, 3, CvType.CV_64FC1);
-        camRotMat.put(0, 0, 1);
-        camRotMat.put(1, 1, Math.cos(camRot));
-        camRotMat.put(1, 2, Math.sin(camRot));
-        camRotMat.put(2, 1, -Math.sin(camRot));
-        camRotMat.put(2, 2, Math.cos(camRot));
+    private void offsetAdjustment() {
 
         // Line position relative to center of robot
-        Mat lineWorldPos = new Mat();
-        Core.gemm(camRotMat, pos, 1, new Mat(), 0, lineWorldPos);
-        Core.add(lineWorldPos, camOffset, lineWorldPos);
+        Core.gemm(rotationMat, topTvec, 1, new Mat(), 0, topTvec);
+        Core.add(topTvec, camOffset, topTvec);
 
-        return lineWorldPos;
+        Core.gemm(rotationMat, bottomTvec, 1, new Mat(), 0, bottomTvec);
+        Core.add(bottomTvec, camOffset, bottomTvec);
+
+        Core.multiply(topRvec, new Scalar(180 / Math.PI), topRvec);
+        Core.multiply(bottomRvec, new Scalar(180 / Math.PI), bottomRvec);
     }
 
-    private void setHeading(Mat[] pos) {
-        double botX = pos[0].get(0, 0)[0];
-        double botZ = pos[0].get(2, 0)[0];
-        double topX = pos[1].get(0, 0)[0];
-        double topZ = pos[1].get(2, 0)[0];
+    private void setHeading() {
+        double bottomX = bottomTvec.get(0, 0)[0];
+        double bottomZ = bottomTvec.get(2, 0)[0];
+        double topX = topTvec.get(0, 0)[0];
+        double topZ = topTvec.get(2, 0)[0];
 
-        angleToLine = Math.atan(botX / botZ) * 180 / Math.PI;
-        distanceToLine = Math.sqrt(botX * botX + botZ * botZ);
+        angleToLine = Math.atan(bottomX / bottomZ) * 180 / Math.PI;
+        distanceToLine = Math.sqrt(bottomX * bottomX + bottomZ * bottomZ);
         distanceToLine /= 12;
-        angleToWall = Math.atan((topX - botX) / (topZ - botZ)) * 180 / Math.PI;
-
-        lineX = botX;
-        lineY = pos[0].get(1, 0)[0];
-        lineZ = botZ;
+        angleToWall = Math.atan((topX - bottomX) / (topZ - bottomZ)) * 180 / Math.PI;
     }
 
     private void drawBox(MatOfPoint2f imagePoints, MatOfPoint2f shiftedImagePoints) {
@@ -258,7 +246,6 @@ public class LinePipeline2 implements VisionPipeline {
         Imgproc.drawContours(dst, Arrays.asList(new MatOfPoint(shiftedImagePoints.toArray())), -1, MAGENTA, 2);
 
     }
-
 
     private MatOfPoint2f reorderPoints(MatOfPoint2f m) {
         Point[] points = m.toArray();
@@ -284,5 +271,72 @@ public class LinePipeline2 implements VisionPipeline {
         }
 
         return new MatOfPoint2f(reordered);
+    }
+
+    public void setTapeLength(double inches) {
+        tapeLength = inches;
+    }
+
+    public void setOffset(double rotation, double x, double y, double z) {
+        // Account for camera rotation, rotate counter-clockwise about x axis with
+        // left-hand rule
+        rotationMat = Mat.zeros(3, 3, CvType.CV_64FC1);
+        rotation *= Math.PI / 180;
+        rotationMat.put(0, 0, 1);
+        rotationMat.put(1, 1, Math.cos(rotation));
+        rotationMat.put(1, 2, Math.sin(rotation));
+        rotationMat.put(2, 1, -Math.sin(rotation));
+        rotationMat.put(2, 2, Math.cos(rotation));
+
+        camOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
+        camOffset.put(0, 0, x);
+        camOffset.put(1, 0, y);
+        camOffset.put(2, 0, z - TAPE_DISTANCE_BUFFER);
+    }
+
+    public Mat getDst() {
+        return dst;
+    }
+
+    public String getRotationVector() {
+        String s = "<";
+        if (bottomRvec != null) {
+            for (int i = 0; i < bottomRvec.rows(); i++) {
+                if (i != 0) {
+                    s += ", ";
+                }
+                s += bottomRvec.get(i, 0)[0];
+            }
+        }
+        s += ">";
+
+        return s;
+    }
+
+    public String getTranslationVector() {
+        String s = "<";
+        if (bottomTvec != null) {
+            for (int i = 0; i < bottomTvec.rows(); i++) {
+                if (i != 0) {
+                    s += ", ";
+                }
+                s += bottomTvec.get(i, 0)[0];
+            }
+        }
+        s += ">";
+
+        return s;
+    }
+
+    public double getAngleToLine() {
+        return angleToLine;
+    }
+
+    public double getDistanceToLine() {
+        return distanceToLine;
+    }
+
+    public double getAngleToWall() {
+        return angleToWall;
     }
 }

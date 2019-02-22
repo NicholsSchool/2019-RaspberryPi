@@ -244,13 +244,13 @@ public final class Main {
 
             NetworkTable table = NetworkTableInstance.getDefault().getTable("vision");
 
-            LinePipeline3 linePipeline = new LinePipeline3(18, -14, -41.5, 8.5);
+            LinePipeline linePipeline = new LinePipeline(18, -12, -12, 17);
             // linePipeline.tapeLength = 18;
             // linePipeline.cameraAngleOffset = 10 * Math.PI / 180;
             // linePipeline.cameraXOffset = -12;
             // linePipeline.cameraYOffset = -12;
             // linePipeline.cameraZOffset = 17;
-            Listener<LinePipeline3> lineCallback = pipeline -> {
+            Listener<LinePipeline> lineCallback = pipeline -> {
                 table.getEntry("angleToLine").setDouble(pipeline.getAngleToLine());
                 table.getEntry("distanceToLine").setDouble(pipeline.getDistanceToLine());
                 table.getEntry("angleToWall").setDouble(pipeline.getAngleToWall());
@@ -301,7 +301,7 @@ public final class Main {
                     // linePipeline.cameraXOffset = -12;
                     // linePipeline.cameraYOffset = -12;
                     // linePipeline.cameraZOffset = 17;
-                    linePipeline.setOffset(0, 0, 0);
+                    linePipeline.setOffset(-12, -12, 17);
                     visionThread = new VisionThread(cameras.get(camera), linePipeline, lineCallback);
                     break;
                 case 1:
@@ -309,7 +309,7 @@ public final class Main {
                     // linePipeline.cameraXOffset = 10;
                     // linePipeline.cameraYOffset = -42;
                     // linePipeline.cameraZOffset = -12;
-                    linePipeline.setOffset(0, 0, 0);
+                    linePipeline.setOffset(10, -42, -12);
                     visionThread = new VisionThread(cameras.get(camera), linePipeline, lineCallback);
                     break;
                 }

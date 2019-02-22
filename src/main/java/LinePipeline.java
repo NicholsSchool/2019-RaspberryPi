@@ -1,11 +1,17 @@
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import org.opencv.calib3d.Calib3d;
 import org.opencv.core.Core;
 import org.opencv.core.CvException;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfDouble;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.MatOfPoint3f;
+import org.opencv.core.Point;
+import org.opencv.core.Point3;
 import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
@@ -13,28 +19,43 @@ import org.opencv.imgproc.Imgproc;
 import edu.wpi.first.vision.VisionPipeline;
 
 /**
- * LinePipline gets the heading of alignment lines using contour analysis.
+ * LinePipline gets the heading of alignment lines using contour analysis and
+ * the direct vectors from 3D-2D point correspondence.
  */
 public class LinePipeline implements VisionPipeline {
 
+    @SuppressWarnings("unused")
+    private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0),
+            RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255),
+            MAGENTA = new Scalar(255, 0, 255);
+
     private static final int THRESHOLD = 160;
-    private static final Scalar
-        GREEN = new Scalar(0, 255, 0),
-        RED = new Scalar(0, 0, 255),
-        YELLOW = new Scalar(0, 255, 255),
-        ORANGE = new Scalar(0, 165, 255);
-    private static final int HORIZONTAL_FOV = 57;
-    private static final double TAPE_WIDTH = 2 / 12d; // in feet
-    private static final double CAMERA_HEIGHT = 33.5 / 12d; // in feet
 
-    private static final double CAMERA_HORIZONTAL_OFFSET = 11 / 12d; // camera distance from the middle of the robot
-    private static final double CAMERA_DEPTH_OFFSET = 13 / 12d; // camera depth from the middle of the robot (?)
+    private static final double FOCAL_LENGTH = 300; // In pixels, needs tuning if res is changed
+    private static final int TAPE_DISTANCE_BUFFER = 12; // Distance padding from tip of tape
 
-    public Mat dst;
+    private Mat dst;
 
-    public double angleToLine;
-    public double distanceToLine;
-    public double angleToWall;
+    private double tapeLength;
+    private Mat camOffset;
+
+    private MatOfPoint2f line;
+
+    private Mat rvec;
+    private Mat tvec;
+
+    private double angleToLine;
+    private double distanceToLine;
+    private double angleToWall;
+
+    public LinePipeline(double tapeLength, double xOffset, double yOffset, double zOffset) {
+        this.tapeLength = tapeLength;
+
+        camOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
+        camOffset.put(0, 0, xOffset);
+        camOffset.put(1, 0, yOffset);
+        camOffset.put(2, 0, zOffset - TAPE_DISTANCE_BUFFER);
+    }
 
     @Override
     public void process(Mat src) {
@@ -42,20 +63,28 @@ public class LinePipeline implements VisionPipeline {
             return;
         }
 
-        ArrayList<MatOfPoint> contours = getLines(src);
-        MatOfPoint realLine = getRealLine(contours);
+        getLine(src);
 
-        setHeading(realLine);
+        if (line == null) {
+            return;
+        }
+
+        getVectors();
+
+        offsetAdjustment();
+
+        setHeading();
     }
 
-    private ArrayList<MatOfPoint> getLines(Mat src) {
+    // Get the contours of bright objects
+    private void getLine(Mat src) {
         dst = new Mat();
 
         // Extract whites
         Core.inRange(src, new Scalar(THRESHOLD, THRESHOLD, THRESHOLD), new Scalar(255, 255, 255), dst);
 
         // Find all external contours
-        ArrayList<MatOfPoint> contours = new ArrayList<>();
+        ArrayList<MatOfPoint> contours = new ArrayList<MatOfPoint>();
         try {
             Imgproc.findContours(dst, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
         } catch (CvException e) {
@@ -65,12 +94,7 @@ public class LinePipeline implements VisionPipeline {
 
         dst = src;
 
-        return contours;
-    }
-
-    private MatOfPoint getRealLine(ArrayList<MatOfPoint> contours) {
-        MatOfPoint realLine = null;
-        // RotatedRect realLineRect = null;
+        line = null;
         double closest = 1;
 
         // Approximate contours with polygons
@@ -80,9 +104,9 @@ public class LinePipeline implements VisionPipeline {
                 // Convert format
                 MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
 
-                // Epsilon will be 2% of the perimeter, a lower epsilon will result in more
+                // Epsilon will be 1.5% of the perimeter, a lower epsilon will result in more
                 // vertices
-                double epsilon = 0.02 * Imgproc.arcLength(contour2f, true);
+                double epsilon = 0.015 * Imgproc.arcLength(contour2f, true);
 
                 // Approximate contour to polygon
                 Imgproc.approxPolyDP(contour2f, contour2f, epsilon, true);
@@ -100,138 +124,193 @@ public class LinePipeline implements VisionPipeline {
                     double w = rect.size.width;
                     double ratio = Math.max(h, w) / Math.min(h, w);
 
-                    // distance to center of the screen as a percentage
+                    // Distance to center of the screen as a percentage
                     double distanceToCenter = Math.abs(rect.center.x / dst.width() - 0.5);
 
                     // The "real" line will be the rectangle greater than a certain length to width
                     // ratio that is closest to the center of the screen
                     if (ratio > 2 && distanceToCenter < closest) {
-                        realLine = contour;
-                        // realLineRect = rect;
+                        line = contour2f;
                         closest = distanceToCenter;
                     }
                 } else {
                     // Draw the contour
-                    Imgproc.drawContours(dst, Arrays.asList(contour), -1, ORANGE, 1);
+                    // Imgproc.drawContours(dst, Arrays.asList(contour), -1, ORANGE, 1);
                 }
             } else {
                 // Draw the contour
-                Imgproc.drawContours(dst, Arrays.asList(contour), -1, RED, 1);
+                // Imgproc.drawContours(dst, Arrays.asList(contour), -1, RED, 1);
             }
         }
-
-        return realLine;
     }
 
-    private void setHeading(MatOfPoint line) {
-        if (line == null) {
-            return;
-        }
-        // Draw the contour
-        Imgproc.drawContours(dst, Arrays.asList(line), -1, GREEN, 2);
+    private void getVectors() {
+        line = reorderPoints(line);
 
-        // Get the best fit line
-        Mat fit = new Mat();
-        Imgproc.fitLine(line, fit, Imgproc.DIST_L2, 0, 0.01, 0.01);
-        double vx = fit.get(0, 0)[0];
-        double vy = fit.get(1, 0)[0];
-        // Change the vector so that it is facing upwards
-        if (vy > 0) {
-            vx *= -1;
-            vy *= -1;
+        // All camera intrinsics are in pixel values
+        final double principalOffsetX = dst.width() / 2;
+        final double principalOffsetY = dst.height() / 2;
+        Mat camIntrinsics = Mat.zeros(3, 3, CvType.CV_64FC1);
+        camIntrinsics.put(0, 0, FOCAL_LENGTH);
+        camIntrinsics.put(0, 2, principalOffsetX);
+        camIntrinsics.put(1, 1, FOCAL_LENGTH);
+        camIntrinsics.put(1, 2, principalOffsetY);
+        camIntrinsics.put(2, 2, 1);
+
+        // 3D axes is same as 2D image axes, right is positive x, down is positive y,
+        // foward is positive z (a clockwise axes system)
+        // Points start with bottom left corner and run counter-clockwise
+        // Bottom of the line as (0, 0, 0)
+        Point3[] worldSpaceArr = new Point3[4];
+        worldSpaceArr[0] = new Point3(-1, 0, 0);
+        worldSpaceArr[1] = new Point3(1, 0, 0);
+        worldSpaceArr[2] = new Point3(1, 0, tapeLength);
+        worldSpaceArr[3] = new Point3(-1, 0, tapeLength);
+        MatOfPoint3f worldSpacePts = new MatOfPoint3f(worldSpaceArr);
+
+        rvec = new Mat();
+        tvec = new Mat();
+        Calib3d.solvePnP(worldSpacePts, line, camIntrinsics, new MatOfDouble(), rvec, tvec);
+
+        // Shift the points up 2 inches to draw the 3D box
+        Point3[] shiftedWorldSpaceArr = new Point3[4];
+        shiftedWorldSpaceArr[0] = new Point3(-1, -2, 0);
+        shiftedWorldSpaceArr[1] = new Point3(1, -2, 0);
+        shiftedWorldSpaceArr[2] = new Point3(1, -2, tapeLength);
+        shiftedWorldSpaceArr[3] = new Point3(-1, -2, tapeLength);
+        MatOfPoint3f shiftedWorldSpacePts = new MatOfPoint3f(shiftedWorldSpaceArr);
+        MatOfPoint2f shiftedImgPts = new MatOfPoint2f();
+        Calib3d.projectPoints(shiftedWorldSpacePts, rvec, tvec, camIntrinsics, new MatOfDouble(), shiftedImgPts);
+
+        drawBox(line, shiftedImgPts);
+    }
+
+    private void offsetAdjustment() {
+
+        // Account for camera rotation, rotate counter-clockwise about x axis with
+        // left-hand rule
+        double camRotation = rvec.get(0, 0)[0];
+        Mat rotationMat = Mat.zeros(3, 3, CvType.CV_64FC1);
+        rotationMat.put(0, 0, 1);
+        rotationMat.put(1, 1, Math.cos(camRotation));
+        rotationMat.put(1, 2, Math.sin(camRotation));
+        rotationMat.put(2, 1, -Math.sin(camRotation));
+        rotationMat.put(2, 2, Math.cos(camRotation));
+        Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
+
+        // Reverse the rotation and multiply by the translation to get the position of the line
+    	// Mat rmat = new Mat();
+    	// Calib3d.Rodrigues(rvec, rmat);
+    	// Core.transpose(rmat, rmat);
+    	// Core.gemm(rmat, tvec, 1, new Mat(), 0, tvec);
+
+        Core.add(tvec, camOffset, tvec);
+
+        Core.multiply(rvec, new Scalar(180 / Math.PI), rvec);
+    }
+
+    private void setHeading() {
+        double x = tvec.get(0, 0)[0];
+        double z = tvec.get(2, 0)[0];
+
+        angleToLine = Math.atan(x / z) * 180 / Math.PI;
+        distanceToLine = Math.sqrt(x * x + z * z);
+        distanceToLine /= 12;
+        // Angle to wall is the Y rotation of the line
+        angleToWall = rvec.get(1, 0)[0];
+    }
+
+    private void drawBox(MatOfPoint2f imagePoints, MatOfPoint2f shiftedImagePoints) {
+        Imgproc.drawContours(dst, Arrays.asList(new MatOfPoint(imagePoints.toArray())), -1, GREEN, 2);
+
+        for (int i = 0; i < imagePoints.rows(); i++) {
+            Imgproc.line(dst, new Point(imagePoints.get(i, 0)), new Point(shiftedImagePoints.get(i, 0)), BLUE, 2);
         }
 
-        // Get the rotation of the line which is the angle to the wall
-        double angle = Math.atan(-vy / vx);
-        // Convert cartesian angle to angle from vertical
-        if (angle < 0) {
-            angle += Math.PI;
-        }
-        angleToWall = -(angle * 180 / Math.PI - 90);
+        Imgproc.drawContours(dst, Arrays.asList(new MatOfPoint(shiftedImagePoints.toArray())), -1, MAGENTA, 2);
+
+    }
+
+    private MatOfPoint2f reorderPoints(MatOfPoint2f m) {
+        Point[] points = m.toArray();
 
         // Get the bottom two vertices
-        double[] lowest = { 0, 0 };
-        double[] second = { 0, 0 };
-        for (int i = 0; i < line.rows(); i++) {
-            double[] p = line.get(i, 0);
-            if (p[1] > lowest[1]) {
+        int lowest = 0;
+        int second = 0;
+        for (int i = 0; i < points.length; i++) {
+            if (points[i].y > points[lowest].y) {
                 second = lowest;
-                lowest = p;
-            } else if (p[1] > second[1]) {
-                second = p;
+                lowest = i;
+            } else if (points[i].y > points[second].y) {
+                second = i;
             }
         }
 
-        // Get the midpoint of the bottom two vertices
-        double x = (lowest[0] + second[0]) / 2;
-        // double y = (lowest[1] + second[1]) / 2;
+        // Get the bottom left vertex
+        int bl = points[lowest].x < points[second].x ? lowest : second;
 
-        // The angle to the lline is the distance from the screen center multiplied by
-        // the camera FOV
-        angleToLine = (x / dst.width() - 0.5) * HORIZONTAL_FOV;
-
-        // Get the distance using the distance between the bottom vertices as the line
-        // width
-        double deltaX = lowest[0] - second[0];
-        double deltaY = lowest[1] - second[1];
-        double width = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-        double angularWidth = width / dst.width() * HORIZONTAL_FOV;
-        distanceToLine = TAPE_WIDTH / 2 / Math.tan(angularWidth * Math.PI / 180 / 2);
-        distanceToLine = Math.sqrt(distanceToLine * distanceToLine - CAMERA_HEIGHT * CAMERA_HEIGHT);
-
-        // Get the distance using the width of the bounding rect as the line width
-        // double width = Math.min(realLineRect.size.height, realLineRect.size.width);
-        // double angularWidth = width / dst.width() * HORIZONTAL_FOV;
-        // distanceToLine = TAPE_WIDTH / Math.tan(angularWidth * Math.PI / 180);
-        // distanceToLine = Math.sqrt(distanceToLine * distanceToLine - CAMERA_HEIGHT *
-        // CAMERA_HEIGHT);
-
-        // Draw the best fit line
-        // Imgproc.line(dst, new Point(x, y), new Point(x + vx * 100, y + vy * 100), BLUE, 1);
-
-        // Draw the bounding rect
-        // Point[] vertices = new Point[4];
-        // realLineRect.points(vertices);
-        // for (int i = 0; i < vertices.length; i++) {
-        // Imgproc.line(dst, vertices[i], vertices[(i + 1) % 4], YELLOW, 1);
-        // }
-
-        // Heading corrections placed on camera offset from center of rotation
-        if(Double.isNaN(distanceToLine)) {
-            angleToLine = 0;
-            distanceToLine = 0;
-            angleToWall = 0;
+        Point[] reordered = new Point[points.length];
+        for (int i = 0; i < reordered.length; i++) {
+            reordered[i] = points[(i + bl) % points.length];
         }
 
-        correctHorizontalOffset();
-        correctDepthOffset();
+        return new MatOfPoint2f(reordered);
     }
 
-    private void correctHorizontalOffset() {
-        // Alpha is the the observed angle to the line from horizontal
-        double alpha = (90 - Math.abs(angleToLine)) * Math.PI / 180;
-        // The common side shared by the triangles formed by the observed angle to line
-        // and the actual angle to line
-        double commonSide = distanceToLine * Math.sin(alpha);
-
-        // Get the actual distance to line using law of cosines
-        distanceToLine = Math.sqrt(distanceToLine * distanceToLine + CAMERA_HORIZONTAL_OFFSET * CAMERA_HORIZONTAL_OFFSET
-                - 2 * distanceToLine * CAMERA_HORIZONTAL_OFFSET * Math.cos(alpha));
-
-        // Beta is the actual angle to line from horizontal
-        double beta = Math.asin(commonSide / distanceToLine) * 180 / Math.PI;
-        angleToLine = Math.copySign(90 - beta, angleToLine);
+    public void setTapeLength(double inches) {
+        tapeLength = inches;
     }
 
-    private void correctDepthOffset() {
-        double alpha = Math.abs(angleToLine) * Math.PI / 180;
-        double commonSide = distanceToLine * Math.sin(alpha);
-
-        distanceToLine = Math.sqrt(distanceToLine * distanceToLine + CAMERA_DEPTH_OFFSET * CAMERA_DEPTH_OFFSET
-                - 2 * distanceToLine * CAMERA_DEPTH_OFFSET * Math.cos(alpha));
-
-        double beta = Math.asin(commonSide / distanceToLine) * 180 / Math.PI;
-        angleToLine = Math.copySign(beta, angleToLine);
+    public void setOffset(double x, double y, double z) {
+        camOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
+        camOffset.put(0, 0, x);
+        camOffset.put(1, 0, y);
+        camOffset.put(2, 0, z - TAPE_DISTANCE_BUFFER);
     }
 
+    public Mat getDst() {
+        return dst;
+    }
+
+    public String getRotationVector() {
+        String s = "<";
+        if (rvec != null) {
+            for (int i = 0; i < rvec.rows(); i++) {
+                if (i != 0) {
+                    s += ", ";
+                }
+                s += rvec.get(i, 0)[0];
+            }
+        }
+        s += ">";
+
+        return s;
+    }
+
+    public String getTranslationVector() {
+        String s = "<";
+        if (tvec != null) {
+            for (int i = 0; i < tvec.rows(); i++) {
+                if (i != 0) {
+                    s += ", ";
+                }
+                s += tvec.get(i, 0)[0];
+            }
+        }
+        s += ">";
+
+        return s;
+    }
+
+    public double getAngleToLine() {
+        return angleToLine;
+    }
+
+    public double getDistanceToLine() {
+        return distanceToLine;
+    }
+
+    public double getAngleToWall() {
+        return angleToWall;
+    }
 }
