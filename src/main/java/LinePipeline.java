@@ -15,6 +15,7 @@ import org.opencv.core.Point3;
 import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
+import org.opencv.core.TermCriteria;
 import org.opencv.imgproc.Imgproc;
 
 import edu.wpi.first.vision.VisionPipeline;
@@ -36,6 +37,7 @@ public class LinePipeline implements VisionPipeline {
     private static final int TAPE_DISTANCE_BUFFER = 12; // Distance padding from tip of tape
 
     private Mat dst;
+    private Mat bitmask;
 
     private double tapeLength;
     private Mat camOffset;
@@ -81,21 +83,24 @@ public class LinePipeline implements VisionPipeline {
 
     // Get the contours of bright objects
     private void getLine(Mat src) {
-        dst = new Mat();
+        dst = src;
+        bitmask = new Mat();
 
         // Extract whites
-        Core.inRange(src, new Scalar(THRESHOLD, THRESHOLD, THRESHOLD), new Scalar(255, 255, 255), dst);
+        Core.inRange(src, new Scalar(THRESHOLD, THRESHOLD, THRESHOLD), new Scalar(255, 255, 255), bitmask);
+
+        // Imgproc.cvtColor(src, src, Imgproc.COLOR_BGR2HSV);
+        // Core.inRange(src, new Scalar(0, 0, 215), new Scalar(255, 40, 255), bitmask);
+        // Imgproc.cvtColor(src, src, Imgproc.COLOR_HSV2BGR);
 
         // Find all external contours
         ArrayList<MatOfPoint> contours = new ArrayList<MatOfPoint>();
         try {
-            Imgproc.findContours(dst, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+            Imgproc.findContours(bitmask, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
         } catch (CvException e) {
             // Sometimes the Mat format gets messed up when switching cameras
             System.out.println(e.getMessage());
         }
-
-        dst = src;
 
         line = null;
         double closest = 1;
@@ -190,15 +195,25 @@ public class LinePipeline implements VisionPipeline {
 
     private void offsetAdjustment() {
 
-        // Account for camera rotation in respect to the ground, rotate counter-clockwise
-        // about x axis with left-hand rule
-        double camRotation = rvec.get(0, 0)[0];
-        Mat rotationMat = Mat.zeros(3, 3, CvType.CV_64FC1);
-        rotationMat.put(0, 0, 1);
-        rotationMat.put(1, 1, Math.cos(camRotation));
-        rotationMat.put(1, 2, Math.sin(camRotation));
-        rotationMat.put(2, 1, -Math.sin(camRotation));
-        rotationMat.put(2, 2, Math.cos(camRotation));
+        // Account for camera rotation in respect to the ground, rotate
+        // counter-clockwise about x axis with left-hand rule
+        // double camRotation = rvec.get(0, 0)[0];
+        // Mat rotationMat = Mat.zeros(3, 3, CvType.CV_64FC1);
+        // rotationMat.put(0, 0, 1);
+        // rotationMat.put(1, 1, Math.cos(camRotation));
+        // rotationMat.put(1, 2, Math.sin(camRotation));
+        // rotationMat.put(2, 1, -Math.sin(camRotation));
+        // rotationMat.put(2, 2, Math.cos(camRotation));
+        // Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
+
+        // Account for X and Z axis camera rotation offset, assuming the Y axis rotation of the camera is
+        // lined up correctly with the robot, Z axis rotation offset should be near-zero too
+        // We will use the Y angle to line up with the wall later
+        Mat rotationMat = new Mat();
+        rvec.copyTo(rotationMat);
+        rotationMat.put(1, 0, 0);
+        Calib3d.Rodrigues(rotationMat, rotationMat);
+        Core.transpose(rotationMat, rotationMat);
         Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
 
         Core.add(tvec, camOffset, tvec);
@@ -257,6 +272,12 @@ public class LinePipeline implements VisionPipeline {
         for (int i = 0; i < reordered.length; i++) {
             reordered[i] = points[(i + bl) % points.length];
         }
+
+        MatOfPoint2f res = new MatOfPoint2f(reordered);
+        
+        // Get subpixel locations of the corners
+        TermCriteria criteria = new TermCriteria(TermCriteria.EPS + TermCriteria.COUNT, 40, 0.001);
+        Imgproc.cornerSubPix(bitmask, res, new Size(5, 5), new Size(-1, -1), criteria);
 
         return new MatOfPoint2f(reordered);
     }
