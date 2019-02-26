@@ -226,7 +226,7 @@ public class LinePipeline implements VisionPipeline {
         double z = tvec.get(2, 0)[0];
 
         angleToLine = Math.atan(x / z) * 180 / Math.PI;
-        distanceToLine = Math.sqrt(x * x + z * z);
+        distanceToLine = Math.hypot(x, z);
         distanceToLine /= 12;
         // Angle to wall is the Y rotation of the camera to the line
         angleToWall = rvec.get(1, 0)[0];
