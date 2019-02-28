@@ -239,10 +239,13 @@ public final class Main {
 
         // Start image processing if the correct number of camera streams are open
         if (cameras.size() == NUM_OF_CAMERAS) {
+            // Set Networktable update rate to be 100Hz rather than default 10Hz
+            ntinst.setUpdateRate(0.01);
+
             CvSource cvStream = CameraServer.getInstance().putVideo("Pi Output", CAMERA_RESOLUTION_X,
                     CAMERA_RESOLUTION_Y);
 
-            NetworkTable table = NetworkTableInstance.getDefault().getTable("vision");
+            NetworkTable table = ntinst.getTable("vision");
 
             LinePipeline linePipeline = new LinePipeline(18, -12, -12, 17);
             // linePipeline.tapeLength = 18;
@@ -283,6 +286,7 @@ public final class Main {
             // cvStream.putFrame(pipeline.dst);
             // };
 
+            // Start vision processing on a new thread
             visionThread = new VisionThread(cameras.get(0), linePipeline, lineCallback);
             visionThread.start();
 
