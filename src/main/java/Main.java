@@ -247,7 +247,7 @@ public final class Main {
 
             NetworkTable table = ntinst.getTable("vision");
 
-            LinePipeline linePipeline = new LinePipeline(18, -12, -12, 17);
+            LinePipeline linePipeline = new LinePipeline(18, -10, -16, 16);
             // linePipeline.tapeLength = 18;
             // linePipeline.cameraAngleOffset = 10 * Math.PI / 180;
             // linePipeline.cameraXOffset = -12;
@@ -305,7 +305,7 @@ public final class Main {
                     // linePipeline.cameraXOffset = -12;
                     // linePipeline.cameraYOffset = -12;
                     // linePipeline.cameraZOffset = 17;
-                    linePipeline.setOffset(-12, -12, 17);
+                    linePipeline.setOffset(-10, -16, 16);
                     visionThread = new VisionThread(cameras.get(camera), linePipeline, lineCallback);
                     break;
                 case 1:
@@ -313,7 +313,7 @@ public final class Main {
                     // linePipeline.cameraXOffset = 10;
                     // linePipeline.cameraYOffset = -42;
                     // linePipeline.cameraZOffset = -12;
-                    linePipeline.setOffset(10, -42, -12);
+                    linePipeline.setOffset(10, -43, -12);
                     visionThread = new VisionThread(cameras.get(camera), linePipeline, lineCallback);
                     break;
                 }
