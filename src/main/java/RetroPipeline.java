@@ -92,7 +92,7 @@ public class RetroPipeline implements VisionPipeline {
         Core.inRange(src, new Scalar(0, THRESHOLD, 0), new Scalar(255 - THRESHOLD, 255, 255 - THRESHOLD), bitmask);
 
         // Imgproc.cvtColor(src, src, Imgproc.COLOR_BGR2HSV);
-        // Core.inRange(src, new Scalar(0, 0, 215), new Scalar(255, 40, 255), bitmask);
+        // Core.inRange(src, new Scalar(55, 155, 200), new Scalar(95, 255, 255), bitmask);
         // Imgproc.cvtColor(src, src, Imgproc.COLOR_HSV2BGR);
 
         // Find all external contours
@@ -141,7 +141,7 @@ public class RetroPipeline implements VisionPipeline {
         double closest = 1;
         for (RotatedRect rect : leftTargets) {
             // Distance to center of the screen as a percentage
-            double distanceToCenter = Math.abs(rect.center.x / dst.width() - 0.5);
+            double distanceToCenter = Math.abs(rect.center.x / dst.width() - 0.4);
 
             // The most likely candidate is closest to the center of the screen
             if (distanceToCenter < closest) {
