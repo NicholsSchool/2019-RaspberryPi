@@ -66,7 +66,7 @@ public class LinePipeline implements VisionPipeline {
             return;
         }
 
-        sharpen(src);
+        // sharpen(src);
 
         getLine(src);
 
@@ -232,12 +232,12 @@ public class LinePipeline implements VisionPipeline {
         angleToWall = rvec.get(1, 0)[0];
     }
 
-    private void sharpen(Mat src) {
-        // Sharpen original image by subtracting a weighted blurred version
-        Mat blurred = new Mat();
-        Imgproc.GaussianBlur(src, blurred, new Size(0, 0), 3);
-        Core.addWeighted(src, 1.5, blurred, -0.5, 0, src);
-    }
+    // private void sharpen(Mat src) {
+    //     // Sharpen original image by subtracting a weighted blurred version
+    //     Mat blurred = new Mat();
+    //     Imgproc.GaussianBlur(src, blurred, new Size(0, 0), 3);
+    //     Core.addWeighted(src, 1.5, blurred, -0.5, 0, src);
+    // }
 
     private void drawBox(MatOfPoint2f imagePoints, MatOfPoint2f shiftedImagePoints) {
         Imgproc.drawContours(dst, Arrays.asList(new MatOfPoint(imagePoints.toArray())), -1, GREEN, 2);

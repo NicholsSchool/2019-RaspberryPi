@@ -248,12 +248,7 @@ public final class Main {
             NetworkTable table = ntinst.getTable("vision");
 
             LinePipeline linePipeline = new LinePipeline(18, -10, -16, 16);
-            // linePipeline.tapeLength = 18;
-            // linePipeline.cameraAngleOffset = 10 * Math.PI / 180;
-            // linePipeline.cameraXOffset = -12;
-            // linePipeline.cameraYOffset = -12;
-            // linePipeline.cameraZOffset = 17;
-            Listener<LinePipeline> lineCallback = pipeline -> {
+            Listener<LinePipeline> lListener = pipeline -> {
                 table.getEntry("angleToLine").setDouble(pipeline.getAngleToLine());
                 table.getEntry("distanceToLine").setDouble(pipeline.getDistanceToLine());
                 table.getEntry("angleToWall").setDouble(pipeline.getAngleToWall());
@@ -266,19 +261,22 @@ public final class Main {
                 SmartDashboard.putString("Translation Vector: ", pipeline.getTranslationVector());
 
                 cvStream.putFrame(pipeline.getDst());
-                // table.getEntry("angleToLine").setDouble(pipeline.angleToLine);
-                // table.getEntry("distanceToLine").setDouble(pipeline.distanceToLine);
-                // table.getEntry("angleToWall").setDouble(pipeline.angleToWall);
+            };
 
-                // SmartDashboard.putNumber("Angle To Line: ", pipeline.angleToLine);
-                // SmartDashboard.putNumber("Distance To Line: ", pipeline.distanceToLine);
-                // SmartDashboard.putNumber("Angle To Wall: ", pipeline.angleToWall);
+            RetroPipeline retroPipeline = new RetroPipeline(-10, -16, 16);
+            Listener<RetroPipeline> rListener = pipeline -> {
+                table.getEntry("angleToLine").setDouble(pipeline.getAngleToTarget());
+                table.getEntry("distanceToLine").setDouble(pipeline.getDistanceToTarget());
+                table.getEntry("angleToWall").setDouble(pipeline.getAngleToWall());
 
-                // SmartDashboard.putNumber("Line X: ", pipeline.lineX);
-                // SmartDashboard.putNumber("Line Y: ", pipeline.lineY);
-                // SmartDashboard.putNumber("Line Z: ", pipeline.lineZ);
+                SmartDashboard.putNumber("Angle To Line: ", pipeline.getAngleToTarget());
+                SmartDashboard.putNumber("Distance To Line: ", pipeline.getDistanceToTarget());
+                SmartDashboard.putNumber("Angle To Wall: ", pipeline.getAngleToWall());
 
-                // cvStream.putFrame(pipeline.dst);
+                SmartDashboard.putString("Rotation Vector: ", pipeline.getRotationVector());
+                SmartDashboard.putString("Translation Vector: ", pipeline.getTranslationVector());
+
+                cvStream.putFrame(pipeline.getDst());
             };
 
             // EmptyPipeline emptyPipeline = new EmptyPipeline();
@@ -287,7 +285,7 @@ public final class Main {
             // };
 
             // Start vision processing on a new thread
-            visionThread = new VisionThread(cameras.get(0), linePipeline, lineCallback);
+            visionThread = new VisionThread(cameras.get(0), linePipeline, lListener);
             visionThread.start();
 
             table.getEntry("camera").addListener(event -> {
@@ -301,20 +299,12 @@ public final class Main {
 
                 switch (camera) {
                 case 0:
-                    // linePipeline.cameraAngleOffset = 10 * Math.PI / 180;
-                    // linePipeline.cameraXOffset = -12;
-                    // linePipeline.cameraYOffset = -12;
-                    // linePipeline.cameraZOffset = 17;
                     linePipeline.setOffset(-10, -16, 16);
-                    visionThread = new VisionThread(cameras.get(camera), linePipeline, lineCallback);
+                    visionThread = new VisionThread(cameras.get(camera), linePipeline, lListener);
                     break;
                 case 1:
-                    // linePipeline.cameraAngleOffset = 25 * Math.PI / 180;
-                    // linePipeline.cameraXOffset = 10;
-                    // linePipeline.cameraYOffset = -42;
-                    // linePipeline.cameraZOffset = -12;
                     linePipeline.setOffset(10, -43, -12);
-                    visionThread = new VisionThread(cameras.get(camera), linePipeline, lineCallback);
+                    visionThread = new VisionThread(cameras.get(camera), linePipeline, lListener);
                     break;
                 }
 
@@ -322,20 +312,9 @@ public final class Main {
             }, EntryListenerFlags.kNew | EntryListenerFlags.kUpdate | EntryListenerFlags.kImmediate
                     | EntryListenerFlags.kLocal);
 
-            // double num = 0;
             // loop forever
             while (true) {
                 try {
-                    System.out.println("Angle To Line: " + table.getEntry("angleToLine").getDouble(0));
-                    System.out.println("Distance To Line: " + table.getEntry("distanceToLine").getDouble(0));
-                    System.out.println("Angle To Wall: " + table.getEntry("angleToWall").getDouble(0));
-
-                    // table.getEntry("camera").setDouble(num);
-                    // if (num == 0) {
-                    // num = 1;
-                    // } else {
-                    // num = 0;
-                    // }
                     Thread.sleep(5000);
                 } catch (InterruptedException e) {
                     System.out.println("Main thread sleep interrupted, are you switching cameras?");
