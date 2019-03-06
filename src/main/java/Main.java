@@ -247,23 +247,23 @@ public final class Main {
 
             NetworkTable table = ntinst.getTable("vision");
 
-            LinePipeline linePipeline = new LinePipeline(18, -10, -16, 16);
-            Listener<LinePipeline> lListener = pipeline -> {
-                table.getEntry("angleToLine").setDouble(pipeline.getAngleToLine());
-                table.getEntry("distanceToLine").setDouble(pipeline.getDistanceToLine());
-                table.getEntry("angleToWall").setDouble(pipeline.getAngleToWall());
+            // LinePipeline linePipeline = new LinePipeline(18, -10, -16, 16);
+            // Listener<LinePipeline> lListener = pipeline -> {
+            //     table.getEntry("angleToLine").setDouble(pipeline.getAngleToLine());
+            //     table.getEntry("distanceToLine").setDouble(pipeline.getDistanceToLine());
+            //     table.getEntry("angleToWall").setDouble(pipeline.getAngleToWall());
 
-                SmartDashboard.putNumber("Angle To Line: ", pipeline.getAngleToLine());
-                SmartDashboard.putNumber("Distance To Line: ", pipeline.getDistanceToLine());
-                SmartDashboard.putNumber("Angle To Wall: ", pipeline.getAngleToWall());
+            //     SmartDashboard.putNumber("Angle To Line: ", pipeline.getAngleToLine());
+            //     SmartDashboard.putNumber("Distance To Line: ", pipeline.getDistanceToLine());
+            //     SmartDashboard.putNumber("Angle To Wall: ", pipeline.getAngleToWall());
 
-                SmartDashboard.putString("Rotation Vector: ", pipeline.getRotationVector());
-                SmartDashboard.putString("Translation Vector: ", pipeline.getTranslationVector());
+            //     SmartDashboard.putString("Rotation Vector: ", pipeline.getRotationVector());
+            //     SmartDashboard.putString("Translation Vector: ", pipeline.getTranslationVector());
 
-                cvStream.putFrame(pipeline.getDst());
-            };
+            //     cvStream.putFrame(pipeline.getDst());
+            // };
 
-            RetroPipeline retroPipeline = new RetroPipeline(-10, -16, 16);
+            RetroPipeline retroPipeline = new RetroPipeline(4, -20.5, 5);
             Listener<RetroPipeline> rListener = pipeline -> {
                 table.getEntry("angleToLine").setDouble(pipeline.getAngleToTarget());
                 table.getEntry("distanceToLine").setDouble(pipeline.getDistanceToTarget());
@@ -279,13 +279,13 @@ public final class Main {
                 cvStream.putFrame(pipeline.getDst());
             };
 
-            // EmptyPipeline emptyPipeline = new EmptyPipeline();
-            // Listener<EmptyPipeline> emptyCallback = pipeline -> {
-            // cvStream.putFrame(pipeline.dst);
-            // };
+            EmptyPipeline emptyPipeline = new EmptyPipeline();
+            Listener<EmptyPipeline> eListener = pipeline -> {
+            cvStream.putFrame(pipeline.dst);
+            };
 
             // Start vision processing on a new thread
-            visionThread = new VisionThread(cameras.get(0), linePipeline, lListener);
+            visionThread = new VisionThread(cameras.get(0), retroPipeline, rListener);
             visionThread.start();
 
             table.getEntry("camera").addListener(event -> {
@@ -299,12 +299,10 @@ public final class Main {
 
                 switch (camera) {
                 case 0:
-                    linePipeline.setOffset(-10, -16, 16);
-                    visionThread = new VisionThread(cameras.get(camera), linePipeline, lListener);
+                    visionThread = new VisionThread(cameras.get(camera), retroPipeline, rListener);
                     break;
                 case 1:
-                    linePipeline.setOffset(10, -43, -12);
-                    visionThread = new VisionThread(cameras.get(camera), linePipeline, lListener);
+                    visionThread = new VisionThread(cameras.get(camera), emptyPipeline, eListener);
                     break;
                 }
 

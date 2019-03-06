@@ -26,15 +26,12 @@ import edu.wpi.first.vision.VisionPipeline;
  */
 public class RetroPipeline implements VisionPipeline {
 
-    @SuppressWarnings("unused")
     private static final Scalar BLUE = new Scalar(255, 0, 0), GREEN = new Scalar(0, 255, 0),
             RED = new Scalar(0, 0, 255), YELLOW = new Scalar(0, 255, 255), ORANGE = new Scalar(0, 165, 255),
             MAGENTA = new Scalar(255, 0, 255);
 
-    private static final int THRESHOLD = 40;
-
     private static final double FOCAL_LENGTH = 320; // In pixels, needs tuning if res is changed
-    private static final int DISTANCE_BUFFER = 36; // Distance padding from tip of tape
+    private static final int DISTANCE_BUFFER = 24; // Distance padding from tip of tape
 
     private Mat dst;
     private Mat bitmask;
@@ -62,6 +59,10 @@ public class RetroPipeline implements VisionPipeline {
 
     @Override
     public void process(Mat src) {
+        angleToTarget = 0;
+        distanceToTarget = 0;
+        angleToWall = 0;
+
         if (src.empty()) {
             return;
         }
@@ -89,7 +90,7 @@ public class RetroPipeline implements VisionPipeline {
         bitmask = new Mat();
 
         // Extract whites
-        Core.inRange(src, new Scalar(0, THRESHOLD, 0), new Scalar(255 - THRESHOLD, 255, 255 - THRESHOLD), bitmask);
+        Core.inRange(src, new Scalar(80, 80, 0), new Scalar(255, 255, 80), bitmask);
 
         // Imgproc.cvtColor(src, src, Imgproc.COLOR_BGR2HSV);
         // Core.inRange(src, new Scalar(55, 155, 200), new Scalar(95, 255, 255), bitmask);
@@ -124,10 +125,10 @@ public class RetroPipeline implements VisionPipeline {
                 // The "real" line will be the rectangle greater than a certain length to width
                 // ratio that is closest to the center of the screen
                 if (ratio > 2) {
-                    if (rect.angle < -65 && rect.angle > -85) {
+                    if (rect.angle < -60 && rect.angle > -90) {
                         leftTargets.add(rect);
                         drawRect(rect, YELLOW);
-                    } else if (rect.angle < -5 && rect.angle > -25) {
+                    } else if (rect.angle < 0 && rect.angle > -30) {
                         rightTargets.add(rect);
                         drawRect(rect, YELLOW);
                     }
