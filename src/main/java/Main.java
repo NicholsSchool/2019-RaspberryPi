@@ -247,23 +247,7 @@ public final class Main {
 
             NetworkTable table = ntinst.getTable("vision");
 
-            // LinePipeline linePipeline = new LinePipeline(18, -10, -16, 16);
-            // Listener<LinePipeline> lListener = pipeline -> {
-            //     table.getEntry("angleToLine").setDouble(pipeline.getAngleToLine());
-            //     table.getEntry("distanceToLine").setDouble(pipeline.getDistanceToLine());
-            //     table.getEntry("angleToWall").setDouble(pipeline.getAngleToWall());
-
-            //     SmartDashboard.putNumber("Angle To Line: ", pipeline.getAngleToLine());
-            //     SmartDashboard.putNumber("Distance To Line: ", pipeline.getDistanceToLine());
-            //     SmartDashboard.putNumber("Angle To Wall: ", pipeline.getAngleToWall());
-
-            //     SmartDashboard.putString("Rotation Vector: ", pipeline.getRotationVector());
-            //     SmartDashboard.putString("Translation Vector: ", pipeline.getTranslationVector());
-
-            //     cvStream.putFrame(pipeline.getDst());
-            // };
-
-            RetroPipeline retroPipeline = new RetroPipeline(4, -20.5, 5);
+            RetroPipeline retroPipeline = new RetroPipeline(4, -20.5, 2);
             Listener<RetroPipeline> rListener = pipeline -> {
                 table.getEntry("angleToLine").setDouble(pipeline.getAngleToTarget());
                 table.getEntry("distanceToLine").setDouble(pipeline.getDistanceToTarget());

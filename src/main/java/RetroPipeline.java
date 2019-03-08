@@ -51,10 +51,7 @@ public class RetroPipeline implements VisionPipeline {
     private double angleToWall;
 
     public RetroPipeline(double xOffset, double yOffset, double zOffset) {
-        camOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
-        camOffset.put(0, 0, xOffset);
-        camOffset.put(1, 0, yOffset);
-        camOffset.put(2, 0, zOffset - DISTANCE_BUFFER);
+        setOffset(xOffset, yOffset, zOffset);
     }
 
     @Override
@@ -77,7 +74,9 @@ public class RetroPipeline implements VisionPipeline {
 
         getVectors();
 
-        offsetAdjustment();
+        offsetCorrection();
+
+        bufferCorrection();
 
         setHeading();
     }
@@ -91,10 +90,6 @@ public class RetroPipeline implements VisionPipeline {
 
         // Extract whites
         Core.inRange(src, new Scalar(80, 80, 0), new Scalar(255, 255, 80), bitmask);
-
-        // Imgproc.cvtColor(src, src, Imgproc.COLOR_BGR2HSV);
-        // Core.inRange(src, new Scalar(55, 155, 200), new Scalar(95, 255, 255), bitmask);
-        // Imgproc.cvtColor(src, src, Imgproc.COLOR_HSV2BGR);
 
         // Find all external contours
         ArrayList<MatOfPoint> contours = new ArrayList<MatOfPoint>();
@@ -266,25 +261,47 @@ public class RetroPipeline implements VisionPipeline {
         drawBox(boxBottomImgPts, boxTopImgPts);
     }
 
-    private void offsetAdjustment() {
-        // Account for X and Z axis camera rotation offset, assuming the Y axis rotation
-        // of the camera is
-        // lined up correctly with the robot, Z axis rotation offset should be near-zero
-        // too
-        // We will use the Y angle to line up with the wall later
+    // Account for camera offset relative to robot
+    private void offsetCorrection() {
+        // Account for X and Z axis camera rotation offset so that the vector is aligned
+        // with the robot, assuming the Y axis rotation of the camera is already lined
+        // up correctly with the robot
         Mat rotationMat = new Mat();
         rvec.copyTo(rotationMat);
         rotationMat.put(1, 0, 0);
+        // Convert 3x1 rotation vector to 3x3 rotation matrix
         Calib3d.Rodrigues(rotationMat, rotationMat);
+        // Transpose of rotation matrix is the same as its inverse
         Core.transpose(rotationMat, rotationMat);
         Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
 
         Core.add(tvec, camOffset, tvec);
+    }
 
-        Core.multiply(rvec, new Scalar(180 / Math.PI), rvec);
+    // Account for buffer offset relative to target
+    private void bufferCorrection() {
+        // Apply and remove Y rotation to account for buffer distance from target
+        Mat rotationMat = new Mat();
+        rvec.copyTo(rotationMat);
+        rotationMat.put(0, 0, 0);
+        rotationMat.put(2, 0, 0);
+
+        Calib3d.Rodrigues(rotationMat, rotationMat);
+        Core.transpose(rotationMat, rotationMat);
+        Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
+
+        Mat bufferOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
+        bufferOffset.put(2, 0, -DISTANCE_BUFFER);
+
+        Core.add(tvec, bufferOffset, tvec);
+
+        Core.transpose(rotationMat, rotationMat);
+        Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
     }
 
     private void setHeading() {
+        Core.multiply(rvec, new Scalar(180 / Math.PI), rvec);
+
         double x = tvec.get(0, 0)[0];
         double z = tvec.get(2, 0)[0];
 
@@ -310,7 +327,7 @@ public class RetroPipeline implements VisionPipeline {
         camOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
         camOffset.put(0, 0, x);
         camOffset.put(1, 0, y);
-        camOffset.put(2, 0, z - DISTANCE_BUFFER);
+        camOffset.put(2, 0, z);
     }
 
     public Mat getDst() {
