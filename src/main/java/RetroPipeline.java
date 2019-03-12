@@ -33,6 +33,12 @@ public class RetroPipeline implements VisionPipeline {
     private static final double FOCAL_LENGTH = 320; // In pixels, needs tuning if res is changed
     private static final int DISTANCE_BUFFER = 24; // Distance padding from tip of tape
 
+    private static final int[] WAYPOINTS = {48, 24};
+    private Mat[] tvecs;
+    private double[] anglesToTarget;
+    private double[] distancesToTarget;
+    private double[] anglesToWall;
+
     private Mat dst;
     private Mat bitmask;
 
@@ -52,6 +58,11 @@ public class RetroPipeline implements VisionPipeline {
 
     public RetroPipeline(double xOffset, double yOffset, double zOffset) {
         setOffset(xOffset, yOffset, zOffset);
+
+        tvecs = new Mat[WAYPOINTS.length];
+        anglesToTarget = new double[WAYPOINTS.length];
+        distancesToTarget = new double[WAYPOINTS.length];
+        anglesToWall = new double[WAYPOINTS.length];
     }
 
     @Override
@@ -89,7 +100,7 @@ public class RetroPipeline implements VisionPipeline {
         bitmask = new Mat();
 
         // Extract whites
-        Core.inRange(src, new Scalar(80, 80, 0), new Scalar(255, 255, 80), bitmask);
+        Core.inRange(src, new Scalar(0, 225, 0), new Scalar(25, 255, 25), bitmask);
 
         // Find all external contours
         ArrayList<MatOfPoint> contours = new ArrayList<MatOfPoint>();
@@ -281,35 +292,76 @@ public class RetroPipeline implements VisionPipeline {
     // Account for buffer offset relative to target
     private void bufferCorrection() {
         // Apply and remove Y rotation to account for buffer distance from target
-        Mat rotationMat = new Mat();
-        rvec.copyTo(rotationMat);
-        rotationMat.put(0, 0, 0);
-        rotationMat.put(2, 0, 0);
+        // Mat rotationMat = new Mat();
+        // rvec.copyTo(rotationMat);
+        // rotationMat.put(0, 0, 0);
+        // rotationMat.put(2, 0, 0);
 
-        Calib3d.Rodrigues(rotationMat, rotationMat);
-        Core.transpose(rotationMat, rotationMat);
-        Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
+        // Calib3d.Rodrigues(rotationMat, rotationMat);
+        // Core.transpose(rotationMat, rotationMat);
+        // Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
 
-        Mat bufferOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
-        bufferOffset.put(2, 0, -DISTANCE_BUFFER);
+        // Mat bufferOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
+        // bufferOffset.put(2, 0, -DISTANCE_BUFFER);
 
-        Core.add(tvec, bufferOffset, tvec);
+        // Core.add(tvec, bufferOffset, tvec);
 
-        Core.transpose(rotationMat, rotationMat);
-        Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
+        // Core.transpose(rotationMat, rotationMat);
+        // Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
+
+        for(int i = 0; i < WAYPOINTS.length; i++) {
+            tvecs[i] = tvec.clone();
+            // tvecs[i] = new Mat();
+            // tvec.copyTo(tvecs[i]);
+
+            Mat rotationMat = rvec.clone();
+            // Mat rotationMat = new Mat();
+            // rvec.copyTo(rotationMat);
+            rotationMat.put(0, 0, 0);
+            rotationMat.put(2, 0, 0);
+    
+            Calib3d.Rodrigues(rotationMat, rotationMat);
+            Core.transpose(rotationMat, rotationMat);
+            Core.gemm(rotationMat, tvecs[i], 1, new Mat(), 0, tvecs[i]);
+    
+            Mat bufferOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
+            bufferOffset.put(2, 0, -WAYPOINTS[i]);
+    
+            Core.add(tvecs[i], bufferOffset, tvecs[i]);
+    
+            Core.transpose(rotationMat, rotationMat);
+            Core.gemm(rotationMat, tvecs[i], 1, new Mat(), 0, tvecs[i]);
+        }
     }
 
     private void setHeading() {
         Core.multiply(rvec, new Scalar(180 / Math.PI), rvec);
 
-        double x = tvec.get(0, 0)[0];
-        double z = tvec.get(2, 0)[0];
+        // double x = tvec.get(0, 0)[0];
+        // double z = tvec.get(2, 0)[0];
 
-        angleToTarget = Math.atan(x / z) * 180 / Math.PI;
-        distanceToTarget = Math.hypot(x, z);
-        distanceToTarget /= 12;
+        // angleToTarget = Math.atan(x / z) * 180 / Math.PI;
+        // distanceToTarget = Math.hypot(x, z);
+        // distanceToTarget /= 12;
+
         // Angle to wall is the Y rotation of the camera to the target
-        angleToWall = rvec.get(1, 0)[0];
+        // angleToWall = rvec.get(1, 0)[0];
+
+        for(int i = 0; i < WAYPOINTS.length; i++) {
+            double x = tvecs[i].get(0, 0)[0];
+            double z = tvecs[i].get(2, 0)[0];
+
+            if(z > 0) {
+                anglesToTarget[i] = Math.atan(x / z) * 180 / Math.PI;
+                distancesToTarget[i] = Math.hypot(x, z);
+                distancesToTarget[i] /= 12;
+                anglesToWall[i] = rvec.get(1, 0)[0];
+            } else {
+                anglesToTarget[i] = 0;
+                distancesToTarget[i] = 0;
+                anglesToWall[i] = 0;
+            }
+        }
     }
 
     private void drawBox(MatOfPoint2f imagePoints, MatOfPoint2f shiftedImagePoints) {
@@ -374,5 +426,21 @@ public class RetroPipeline implements VisionPipeline {
 
     public double getAngleToWall() {
         return angleToWall;
+    }
+
+    public int numOfWaypoints() {
+        return WAYPOINTS.length;
+    }
+
+    public double[] getAnglesToTarget() {
+        return anglesToTarget;
+    }
+
+    public double[] getDistancesToTarget() {
+        return distancesToTarget;
+    }
+
+    public double[] getAnglesToWall() {
+        return anglesToWall;
     }
 }
