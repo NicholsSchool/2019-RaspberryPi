@@ -31,9 +31,11 @@ public class RetroPipeline implements VisionPipeline {
             MAGENTA = new Scalar(255, 0, 255);
 
     private static final double FOCAL_LENGTH = 320; // In pixels, needs tuning if res is changed
-    private static final int DISTANCE_BUFFER = 24; // Distance padding from tip of tape
 
-    private static final int[] WAYPOINTS = {48, 24};
+    // Waypoints as distances from the target (in inches)
+    private static final int[] WAYPOINTS = {58, 40};
+
+    // Headings and distances for each waypoint
     private Mat[] tvecs;
     private double[] anglesToTarget;
     private double[] distancesToTarget;
@@ -52,10 +54,6 @@ public class RetroPipeline implements VisionPipeline {
     private Mat rvec;
     private Mat tvec;
 
-    private double angleToTarget;
-    private double distanceToTarget;
-    private double angleToWall;
-
     public RetroPipeline(double xOffset, double yOffset, double zOffset) {
         setOffset(xOffset, yOffset, zOffset);
 
@@ -67,9 +65,11 @@ public class RetroPipeline implements VisionPipeline {
 
     @Override
     public void process(Mat src) {
-        angleToTarget = 0;
-        distanceToTarget = 0;
-        angleToWall = 0;
+        for(int i = 0; i < WAYPOINTS.length; i++) {
+            anglesToTarget[i] = 0;
+            distancesToTarget[i] = 0;
+            anglesToWall[i] = 0;
+        }
 
         if (src.empty()) {
             return;
@@ -100,7 +100,7 @@ public class RetroPipeline implements VisionPipeline {
         bitmask = new Mat();
 
         // Extract whites
-        Core.inRange(src, new Scalar(0, 225, 0), new Scalar(25, 255, 25), bitmask);
+        Core.inRange(src, new Scalar(0, 200, 0), new Scalar(55, 255, 55), bitmask);
 
         // Find all external contours
         ArrayList<MatOfPoint> contours = new ArrayList<MatOfPoint>();
@@ -116,7 +116,7 @@ public class RetroPipeline implements VisionPipeline {
 
         for (MatOfPoint contour : contours) {
             // Only include contours larger than 1/400 of the screen
-            if (Imgproc.contourArea(contour) < dst.width() * dst.height() / 400) {
+            if (Imgproc.contourArea(contour) < dst.width() * dst.height() / 500) {
                 // Draw the contour only
                 Imgproc.drawContours(dst, Arrays.asList(contour), -1, RED, 1);
             } else {
@@ -289,34 +289,13 @@ public class RetroPipeline implements VisionPipeline {
         Core.add(tvec, camOffset, tvec);
     }
 
-    // Account for buffer offset relative to target
+    // Account for waypoint offset relative to target
     private void bufferCorrection() {
-        // Apply and remove Y rotation to account for buffer distance from target
-        // Mat rotationMat = new Mat();
-        // rvec.copyTo(rotationMat);
-        // rotationMat.put(0, 0, 0);
-        // rotationMat.put(2, 0, 0);
-
-        // Calib3d.Rodrigues(rotationMat, rotationMat);
-        // Core.transpose(rotationMat, rotationMat);
-        // Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
-
-        // Mat bufferOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
-        // bufferOffset.put(2, 0, -DISTANCE_BUFFER);
-
-        // Core.add(tvec, bufferOffset, tvec);
-
-        // Core.transpose(rotationMat, rotationMat);
-        // Core.gemm(rotationMat, tvec, 1, new Mat(), 0, tvec);
-
+        // Apply and remove Y rotation to account for waypoint distance from target
         for(int i = 0; i < WAYPOINTS.length; i++) {
             tvecs[i] = tvec.clone();
-            // tvecs[i] = new Mat();
-            // tvec.copyTo(tvecs[i]);
 
             Mat rotationMat = rvec.clone();
-            // Mat rotationMat = new Mat();
-            // rvec.copyTo(rotationMat);
             rotationMat.put(0, 0, 0);
             rotationMat.put(2, 0, 0);
     
@@ -337,30 +316,14 @@ public class RetroPipeline implements VisionPipeline {
     private void setHeading() {
         Core.multiply(rvec, new Scalar(180 / Math.PI), rvec);
 
-        // double x = tvec.get(0, 0)[0];
-        // double z = tvec.get(2, 0)[0];
-
-        // angleToTarget = Math.atan(x / z) * 180 / Math.PI;
-        // distanceToTarget = Math.hypot(x, z);
-        // distanceToTarget /= 12;
-
-        // Angle to wall is the Y rotation of the camera to the target
-        // angleToWall = rvec.get(1, 0)[0];
-
         for(int i = 0; i < WAYPOINTS.length; i++) {
             double x = tvecs[i].get(0, 0)[0];
             double z = tvecs[i].get(2, 0)[0];
 
-            if(z > 0) {
-                anglesToTarget[i] = Math.atan(x / z) * 180 / Math.PI;
-                distancesToTarget[i] = Math.hypot(x, z);
-                distancesToTarget[i] /= 12;
-                anglesToWall[i] = rvec.get(1, 0)[0];
-            } else {
-                anglesToTarget[i] = 0;
-                distancesToTarget[i] = 0;
-                anglesToWall[i] = 0;
-            }
+            anglesToTarget[i] = Math.atan(x / z) * 180 / Math.PI;
+            distancesToTarget[i] = Math.hypot(x, z);
+            distancesToTarget[i] /= 12;
+            anglesToWall[i] = rvec.get(1, 0)[0];
         }
     }
 
@@ -414,18 +377,6 @@ public class RetroPipeline implements VisionPipeline {
         s += ">";
 
         return s;
-    }
-
-    public double getAngleToTarget() {
-        return angleToTarget;
-    }
-
-    public double getDistanceToTarget() {
-        return distanceToTarget;
-    }
-
-    public double getAngleToWall() {
-        return angleToWall;
     }
 
     public int numOfWaypoints() {

@@ -249,23 +249,11 @@ public final class Main {
 
             RetroPipeline retroPipeline = new RetroPipeline(4, -20.5, 2);
             Listener<RetroPipeline> rListener = pipeline -> {
-                // table.getEntry("angleToLine").setDouble(pipeline.getAngleToTarget());
-                // table.getEntry("distanceToLine").setDouble(pipeline.getDistanceToTarget());
-                // table.getEntry("angleToWall").setDouble(pipeline.getAngleToWall());
-
                 for(int i = 0; i < pipeline.numOfWaypoints(); i++) {
                     table.getEntry("angleToLine" + i).setDouble(pipeline.getAnglesToTarget()[i]);
                     table.getEntry("distanceToLine" + i).setDouble(pipeline.getDistancesToTarget()[i]);
                     table.getEntry("angleToWall" + i).setDouble(pipeline.getAnglesToWall()[i]);
-
-                    SmartDashboard.putNumber(i + " Angle To Line: ", pipeline.getAnglesToTarget()[i]);
-                    SmartDashboard.putNumber(i + " Distance To Line: ", pipeline.getDistancesToTarget()[i]);
-                    SmartDashboard.putNumber(i + " Angle To Wall: ", pipeline.getAnglesToWall()[i]);
                 }
-
-                SmartDashboard.putNumber("Angle To Line: ", pipeline.getAngleToTarget());
-                SmartDashboard.putNumber("Distance To Line: ", pipeline.getDistanceToTarget());
-                SmartDashboard.putNumber("Angle To Wall: ", pipeline.getAngleToWall());
 
                 SmartDashboard.putString("Rotation Vector: ", pipeline.getRotationVector());
                 SmartDashboard.putString("Translation Vector: ", pipeline.getTranslationVector());
