@@ -33,7 +33,7 @@ public class RetroPipeline implements VisionPipeline {
     private static final double FOCAL_LENGTH = 320; // In pixels, needs tuning if res is changed
 
     // Waypoints as distances from the target (in inches)
-    private static final int[] WAYPOINTS = {58, 40};
+    private static final int[] WAYPOINTS = { 58, 40 };
 
     // Headings and distances for each waypoint
     private Mat[] tvecs;
@@ -51,6 +51,7 @@ public class RetroPipeline implements VisionPipeline {
 
     private MatOfPoint2f target;
 
+    // Vectors from camera to center of target
     private Mat rvec;
     private Mat tvec;
 
@@ -65,7 +66,7 @@ public class RetroPipeline implements VisionPipeline {
 
     @Override
     public void process(Mat src) {
-        for(int i = 0; i < WAYPOINTS.length; i++) {
+        for (int i = 0; i < WAYPOINTS.length; i++) {
             anglesToTarget[i] = 0;
             distancesToTarget[i] = 0;
             anglesToWall[i] = 0;
@@ -87,7 +88,7 @@ public class RetroPipeline implements VisionPipeline {
 
         offsetCorrection();
 
-        bufferCorrection();
+        waypointCalculation();
 
         setHeading();
     }
@@ -290,24 +291,24 @@ public class RetroPipeline implements VisionPipeline {
     }
 
     // Account for waypoint offset relative to target
-    private void bufferCorrection() {
+    private void waypointCalculation() {
         // Apply and remove Y rotation to account for waypoint distance from target
-        for(int i = 0; i < WAYPOINTS.length; i++) {
+        for (int i = 0; i < WAYPOINTS.length; i++) {
             tvecs[i] = tvec.clone();
 
             Mat rotationMat = rvec.clone();
             rotationMat.put(0, 0, 0);
             rotationMat.put(2, 0, 0);
-    
+
             Calib3d.Rodrigues(rotationMat, rotationMat);
             Core.transpose(rotationMat, rotationMat);
             Core.gemm(rotationMat, tvecs[i], 1, new Mat(), 0, tvecs[i]);
-    
+
             Mat bufferOffset = Mat.zeros(3, 1, CvType.CV_64FC1);
             bufferOffset.put(2, 0, -WAYPOINTS[i]);
-    
+
             Core.add(tvecs[i], bufferOffset, tvecs[i]);
-    
+
             Core.transpose(rotationMat, rotationMat);
             Core.gemm(rotationMat, tvecs[i], 1, new Mat(), 0, tvecs[i]);
         }
@@ -316,7 +317,7 @@ public class RetroPipeline implements VisionPipeline {
     private void setHeading() {
         Core.multiply(rvec, new Scalar(180 / Math.PI), rvec);
 
-        for(int i = 0; i < WAYPOINTS.length; i++) {
+        for (int i = 0; i < WAYPOINTS.length; i++) {
             double x = tvecs[i].get(0, 0)[0];
             double z = tvecs[i].get(2, 0)[0];
 
