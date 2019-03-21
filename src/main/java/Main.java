@@ -247,7 +247,7 @@ public final class Main {
 
             NetworkTable table = ntinst.getTable("vision");
 
-            RetroPipeline retroPipeline = new RetroPipeline(4, -20.5, 2);
+            RetroPipeline retroPipeline = new RetroPipeline(-10.5, 0, 16);
             Listener<RetroPipeline> rListener = pipeline -> {
                 for(int i = 0; i < pipeline.numOfWaypoints(); i++) {
                     table.getEntry("angleToLine" + i).setDouble(pipeline.getAnglesToTarget()[i]);
@@ -268,6 +268,8 @@ public final class Main {
 
             // Start vision processing on a new thread
             visionThread = new VisionThread(cameras.get(0), retroPipeline, rListener);
+            // visionThread = new VisionThread(cameras.get(1), emptyPipeline, eListener);
+
             visionThread.start();
 
             table.getEntry("camera").addListener(event -> {

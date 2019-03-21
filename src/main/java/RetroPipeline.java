@@ -321,10 +321,13 @@ public class RetroPipeline implements VisionPipeline {
             double x = tvecs[i].get(0, 0)[0];
             double z = tvecs[i].get(2, 0)[0];
 
-            anglesToTarget[i] = Math.atan(x / z) * 180 / Math.PI;
-            distancesToTarget[i] = Math.hypot(x, z);
-            distancesToTarget[i] /= 12;
-            anglesToWall[i] = rvec.get(1, 0)[0];
+            if(z > 0) {
+                // Only set heading if the target is in front of the robot
+                anglesToTarget[i] = Math.atan(x / z) * 180 / Math.PI;
+                distancesToTarget[i] = Math.hypot(x, z);
+                distancesToTarget[i] /= 12;
+                anglesToWall[i] = rvec.get(1, 0)[0];
+            }
         }
     }
 
