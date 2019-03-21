@@ -70,6 +70,7 @@ public final class Main {
     private static String configFile = "/boot/frc.json";
 
     public static final int CAMERA_RESOLUTION_X = 320, CAMERA_RESOLUTION_Y = 240, CAMERA_FPS = 30;
+    public static final int CAMERA_BRIGHTNESS = 50, CAMERA_WHITE_BALANCE = 4500, CAMERA_EXPOSURE = 0;
     private static final int NUM_OF_CAMERAS = 2;
 
     // @SuppressWarnings("MemberName")
@@ -202,6 +203,9 @@ public final class Main {
 
         camera.setResolution(CAMERA_RESOLUTION_X, CAMERA_RESOLUTION_Y);
         camera.setFPS(CAMERA_FPS);
+        camera.setBrightness(CAMERA_BRIGHTNESS);
+        camera.setWhiteBalanceManual(CAMERA_WHITE_BALANCE);
+        camera.setExposureManual(CAMERA_EXPOSURE);
 
         return camera;
     }
@@ -247,7 +251,7 @@ public final class Main {
 
             NetworkTable table = ntinst.getTable("vision");
 
-            RetroPipeline retroPipeline = new RetroPipeline(-10.5, 0, 16);
+            RetroPipeline retroPipeline = new RetroPipeline(4, 0, 3);
             Listener<RetroPipeline> rListener = pipeline -> {
                 for(int i = 0; i < pipeline.numOfWaypoints(); i++) {
                     table.getEntry("angleToLine" + i).setDouble(pipeline.getAnglesToTarget()[i]);

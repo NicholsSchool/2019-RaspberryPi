@@ -33,7 +33,7 @@ public class RetroPipeline implements VisionPipeline {
     private static final double FOCAL_LENGTH = 320; // In pixels, needs tuning if res is changed
 
     // Waypoints as distances from the target (in inches)
-    private static final int[] WAYPOINTS = { 58, 40 };
+    private static final int[] WAYPOINTS = { 50, 24 };
 
     // Headings and distances for each waypoint
     private Mat[] tvecs;
@@ -101,7 +101,7 @@ public class RetroPipeline implements VisionPipeline {
         bitmask = new Mat();
 
         // Extract whites
-        Core.inRange(src, new Scalar(0, 200, 0), new Scalar(55, 255, 55), bitmask);
+        Core.inRange(src, new Scalar(100, 100, 200), new Scalar(255, 255, 255), bitmask);
 
         // Find all external contours
         ArrayList<MatOfPoint> contours = new ArrayList<MatOfPoint>();
