@@ -4,9 +4,10 @@ FRC Team 4930's codebase for off-board vision processing on a Raspberry Pi for 2
 ![vision demo](https://github.com/NicholsSchool/2019-RaspberryPi/blob/master/demo%20images/vision%20demo.png?raw=true)
 
 ## Cool Features
-- Contour analysis
+- Image contour analysis
 - Sub-pixel corner detection
 - 6D pose esimation with 3D-2D point correspondence
+- Camera offset correction
 - Headings and distances to multiple custom waypoints
 
 ## Building & Deploying
