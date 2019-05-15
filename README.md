@@ -1,22 +1,18 @@
 # 2019-RaspberryPi
-Code base for off-board vision processing on a Raspberry Pi.
+FRC Team 4930's codebase for off-board vision processing on a Raspberry Pi, based off of the Java demo included in FRC's Raspberry Pi image. We use OpenCV to determine the robot's pose relative to the retroreflective tape on the cargo ship and the rocket.
+![vision demo](url)
 
-===================
-Building on desktop
-===================
+## Cool Features
+- Contour analysis
+- Sub-pixel corner detection
+- 6D pose esimation with 3D-2D point correspondence
+- Headings and distances to multiple custom waypoints
 
---------
-Building
---------
-
+## Building & Deploying
 Java 11 is required to build.  Set your path and/or JAVA_HOME environment
 variable appropriately.
 
 1) Run "./gradlew build"
-
----------
-Deploying
----------
 
 On the rPi web dashboard:
 
@@ -29,12 +25,3 @@ On the rPi web dashboard:
 
 The application will be automatically started.  Console output can be seen by
 enabling console output in the Vision Status tab.
-
-=======================
-Building locally on rPi
-=======================
-
-1) Run "./gradlew build"
-2) Run "./install.sh" (replaces /home/pi/runCamera)
-3) Run "./runInteractive" in /home/pi or "sudo svc -t /service/camera" to
-   restart service.
